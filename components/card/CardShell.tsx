@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { RADIUS_VALUES, SHADOW_VALUES } from "@/lib/cards/constants";
 import type { DigitalCardData } from "@/lib/cards/types";
 import { readableOn } from "@/lib/color";
-import { FONT_STACK } from "@/lib/fonts";
+import { FONT_STACK } from "@/lib/cards/font-stacks";
 
 function safeCssUrl(url: string): string {
   return `url("${url.replace(/["\\\n\r]/g, encodeURIComponent)}")`;

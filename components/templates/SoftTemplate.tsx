@@ -2,7 +2,7 @@ import { buildActions } from "@/lib/cards/actions-builder";
 import { CardActions } from "@/components/card/CardActions";
 import { CardFooter } from "@/components/card/CardFooter";
 import { CardHeader } from "@/components/card/CardHeader";
-import { CardInfo } from "@/components/card/CardInfo";
+import { CardDetails, hasDetails } from "@/components/card/CardDetails";
 import { CardQr } from "@/components/card/CardQr";
 import { CardSocialLinks } from "@/components/card/CardSocialLinks";
 import type { TemplateProps } from "./types";
@@ -10,7 +10,7 @@ import type { TemplateProps } from "./types";
 /** Soft: tarjeta flotante redondeada sobre fondo tintado, paneles suaves. */
 export function SoftTemplate({ data, qrSrc }: TemplateProps) {
   const { main, social } = buildActions(data);
-  const hasInfo = Boolean(data.address || data.schedule || data.extraInfo);
+  const hasInfo = hasDetails(data);
   return (
     <>
       <main className="flex flex-1 flex-col px-3 pb-2 pt-4">
@@ -21,7 +21,7 @@ export function SoftTemplate({ data, qrSrc }: TemplateProps) {
             <CardSocialLinks links={social} className="justify-center" />
             {hasInfo ? (
               <div className="rounded-3xl bg-[var(--card-background)] p-5">
-                <CardInfo data={data} />
+                <CardDetails data={data} />
               </div>
             ) : null}
             {data.showQr ? <CardQr src={qrSrc} businessName={data.businessName} /> : null}

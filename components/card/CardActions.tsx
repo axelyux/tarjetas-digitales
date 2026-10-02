@@ -1,6 +1,6 @@
 import { ArrowUpRight } from "lucide-react";
 import type { CSSProperties } from "react";
-import type { CardAction } from "@/lib/cards/actions-builder";
+import type { RenderedAction } from "@/lib/cards/actions-builder";
 import type { DigitalCardData } from "@/lib/cards/types";
 import { ActionIcon } from "./ActionIcon";
 import { CardButton } from "./CardButton";
@@ -8,7 +8,7 @@ import { CardButton } from "./CardButton";
 type Presentation = "buttons" | "rows" | "numbered";
 
 type Props = {
-  actions: CardAction[];
+  actions: RenderedAction[];
   data: Pick<DigitalCardData, "actionsLayout" | "buttonStyle">;
   presentation?: Presentation;
   /** Indice inicial de animacion escalonada. */
@@ -27,6 +27,8 @@ export function CardActions({ actions, data, presentation = "buttons", startInde
           <a
             key={action.key}
             href={action.href}
+            data-action-type={action.type}
+            data-action-id={action.key}
             {...(action.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
             className="cd-rise cd-link group flex items-center gap-4 border-t border-[color-mix(in_srgb,var(--card-text)_16%,transparent)] py-4 last:border-b"
             style={stagger(startIndex + i)}

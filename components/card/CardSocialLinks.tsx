@@ -1,9 +1,9 @@
 import type { CSSProperties } from "react";
-import type { CardAction } from "@/lib/cards/actions-builder";
+import type { RenderedAction } from "@/lib/cards/actions-builder";
 import { ActionIcon } from "./ActionIcon";
 
 type Props = {
-  links: CardAction[];
+  links: RenderedAction[];
   /** "icons": botones redondos. "text": enlaces de texto con subrayado. */
   variant?: "icons" | "text";
   className?: string;
@@ -18,6 +18,8 @@ export function CardSocialLinks({ links, variant = "icons", className = "", star
         <li key={link.key} className="cd-rise" style={{ "--i": startIndex + i } as CSSProperties}>
           <a
             href={link.href}
+            data-action-type={link.type}
+            data-action-id={link.key}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={link.label}

@@ -1,7 +1,6 @@
 -- Tarjetas Digitales: esquema inicial
 -- Ejecutar en Supabase > SQL Editor (o con `supabase db push`).
 
-create extension if not exists pgcrypto;
 
 -- ───────── Admins ─────────
 create table if not exists public.admins (

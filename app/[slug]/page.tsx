@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CardUnavailable } from "@/components/card/CardUnavailable";
 import { DigitalCard } from "@/components/card/DigitalCard";
 import { getPublicCard } from "@/lib/cards/public-queries";
@@ -43,6 +43,8 @@ export default async function CardPage({ params }: Props) {
   if (result.status === "missing") notFound();
   if (result.status === "error") throw new Error("card-unavailable");
   if (result.status === "inactive") return <CardUnavailable kind="inactive" />;
+  // Slug anterior (QR impresos): redirección temporal al slug vigente.
+  if (result.status === "redirect") redirect(`/${result.slug}`);
 
   const qrSrc = result.card.showQr ? await qrDataUriFor(result.card.slug) : undefined;
   return <DigitalCard data={result.card} qrSrc={qrSrc} />;

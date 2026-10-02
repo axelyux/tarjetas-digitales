@@ -11,7 +11,7 @@ export const FONTS = ["inter", "poppins", "playfair", "space-grotesk", "dm-sans"
 export const BACKGROUND_MODES = ["color", "image"] as const;
 export const BUTTON_ICONS = [
   "link", "menu", "tag", "calendar", "shopping-bag", "star", "gift", "clock",
-  "map-pin", "phone", "mail", "globe", "camera", "heart", "book-open", "truck",
+  "map-pin", "phone", "mail", "globe", "camera", "heart", "book-open", "truck", "file-text", "video",
 ] as const;
 
 export type Template = (typeof TEMPLATES)[number];
@@ -69,8 +69,41 @@ export const LOGO_PX: Record<LogoSize, number> = { sm: 64, md: 88, lg: 116 };
 
 export const RESERVED_SLUGS = [
   "admin", "api", "demo", "login", "logout", "auth", "_next", "static", "public",
-  "sitemap", "robots", "favicon", "icon", "app", "dashboard", "cards", "new", "www",
+  "sitemap", "robots", "favicon", "icon", "app", "dashboard", "cards", "new", "www", "p", "preview",
 ] as const;
 
-export const MAX_CUSTOM_BUTTONS = 8;
 export const PAGE_SIZE = 25;
+
+export const ACTION_TYPES = [
+  "whatsapp", "phone", "email", "instagram", "facebook", "maps", "website", "booking",
+  "custom_url", "pdf", "youtube", "tiktok", "linkedin", "catalog",
+] as const;
+export const PUBLICATION_STATUSES = ["draft", "preview", "active", "inactive", "archived"] as const;
+export const PAYMENT_STATUSES = ["pending", "paid", "cancelled"] as const;
+
+export type ActionType = (typeof ACTION_TYPES)[number];
+export type PublicationStatus = (typeof PUBLICATION_STATUSES)[number];
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export const PUBLICATION_LABELS: Record<PublicationStatus, string> = {
+  draft: "Borrador",
+  preview: "Vista previa",
+  active: "Activa",
+  inactive: "Inactiva",
+  archived: "Archivada",
+};
+export const PUBLICATION_HINTS: Record<PublicationStatus, string> = {
+  draft: "No es visible. Solo tú la ves en el panel.",
+  preview: "Solo se ve con el enlace privado de vista previa.",
+  active: "Pública en su dirección.",
+  inactive: "La dirección muestra “tarjeta no disponible”.",
+  archived: "Oculta y fuera de la lista. Se puede restaurar.",
+};
+export const PAYMENT_LABELS: Record<PaymentStatus, string> = {
+  pending: "Pendiente",
+  paid: "Pagada",
+  cancelled: "Cancelada",
+};
+
+export const MAX_ACTIONS = 20;
+export const MAX_BRANCHES = 10;

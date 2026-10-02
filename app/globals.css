@@ -146,6 +146,32 @@ body {
   box-shadow: var(--card-shadow);
 }
 
+.cd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.9rem;
+  border: 1.5px solid color-mix(in srgb, var(--card-text) 22%, transparent);
+  border-radius: var(--card-radius);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.18s, transform 0.18s;
+}
+.cd-chip:active {
+  transform: scale(0.98);
+}
+@media (hover: hover) {
+  .cd-chip:hover {
+    background: color-mix(in srgb, var(--card-primary) 9%, transparent);
+  }
+}
+.cd-chip:focus-visible {
+  outline: 2px solid var(--card-accent);
+  outline-offset: 3px;
+}
+
 /* Entrada escalonada */
 @keyframes cd-rise {
   from {

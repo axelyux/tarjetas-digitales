@@ -86,3 +86,11 @@ export function Toggle({
     </div>
   );
 }
+
+/** Lee un error anidado de react-hook-form por ruta ("actions.0.value"). */
+export function fieldError(errors: unknown, path: string): string | undefined {
+  let node: unknown = errors;
+  for (const part of path.split(".")) node = (node as Record<string, unknown> | undefined)?.[part];
+  const message = (node as { message?: unknown } | undefined)?.message;
+  return typeof message === "string" ? message : undefined;
+}

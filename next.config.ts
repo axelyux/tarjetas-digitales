@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   experimental: {
     optimizePackageImports: ["lucide-react", "react-icons/si"],
-    serverActions: { bodySizeLimit: "3mb" },
+    serverActions: { bodySizeLimit: "6mb" },
   },
   images: {
     remotePatterns: supabaseHost ? [{ protocol: "https", hostname: supabaseHost }] : [],

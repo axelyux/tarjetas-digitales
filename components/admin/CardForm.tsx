@@ -1,30 +1,35 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Download, ExternalLink, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Download, ExternalLink, Eye, Loader2, Pencil, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useFieldArray, useForm, useWatch, type FieldPath } from "react-hook-form";
+import { FormProvider, useForm, useWatch, type FieldPath } from "react-hook-form";
 import { toast } from "sonner";
-import { createCard, updateCard } from "@/lib/cards/actions";
+import { saveCard } from "@/lib/cards/actions";
 import {
-  ACTIONS_LAYOUTS, BORDER_RADII, BUTTON_ICONS, BUTTON_STYLES, FONTS, FONT_LABELS, LAYOUT_LABELS,
-  LAYOUT_VARIANTS, LOGO_SHAPES, LOGO_SIZES, MAX_CUSTOM_BUTTONS, SHADOW_STYLES, TEMPLATES, TEMPLATE_LABELS,
+  ACTIONS_LAYOUTS, BORDER_RADII, BUTTON_STYLES, FONTS, FONT_LABELS, LAYOUT_LABELS, LAYOUT_VARIANTS, LOGO_SHAPES,
+  LOGO_SIZES, PAYMENT_LABELS, PAYMENT_STATUSES, PUBLICATION_HINTS, PUBLICATION_LABELS, PUBLICATION_STATUSES,
+  SHADOW_STYLES, TEMPLATES, TEMPLATE_LABELS, type PublicationStatus,
 } from "@/lib/cards/constants";
 import { PRESETS, PRESET_KEYS, type PresetKey } from "@/lib/cards/presets";
 import { cardInputSchema, type CardInput } from "@/lib/cards/schema";
 import { slugify } from "@/lib/cards/slug";
+import { contrastRatio } from "@/lib/color";
 import { cardUrl } from "@/lib/site";
+import { ActionsEditor } from "./ActionsEditor";
+import { BranchesEditor } from "./BranchesEditor";
 import { CardPreview } from "./CardPreview";
 import { ColorField } from "./ColorField";
 import { CopyButton } from "./CopyButton";
-import { Field, Section, Segmented, Toggle } from "./form-ui";
+import { Field, Section, Segmented, Toggle, fieldError } from "./form-ui";
+import { HoursEditor } from "./HoursEditor";
 import { ImageUploader } from "./ImageUploader";
 
 const CATEGORIES = [
-  "Barbería", "Salón de belleza", "Uñas", "Restaurante", "Cafetería", "Taller mecánico",
-  "Dentista", "Gimnasio", "Tienda", "Profesional independiente",
+  "Barbería", "Salón de belleza", "Uñas", "Restaurante", "Cafetería", "Taller mecánico", "Dentista", "Médico",
+  "Gimnasio", "Tienda", "Hotel", "Fotografía", "Inmobiliaria", "Profesional independiente",
 ];
 
 const TEMPLATE_HINTS: Record<(typeof TEMPLATES)[number], string> = {
@@ -45,29 +50,31 @@ const SHADOW_LABELS = { none: "Ninguna", soft: "Suave", strong: "Marcada" } as c
 const SIZE_LABELS = { sm: "Pequeño", md: "Medio", lg: "Grande" } as const;
 const SHAPE_LABELS = { circle: "Círculo", rounded: "Redondeado", square: "Cuadrado" } as const;
 const ACTIONS_LABELS = { stack: "Vertical", grid: "Cuadrícula" } as const;
-const ICON_LABELS: Record<string, string> = {
-  link: "Enlace", menu: "Menú", tag: "Promoción", calendar: "Calendario", "shopping-bag": "Compras", star: "Estrella",
-  gift: "Regalo", clock: "Reloj", "map-pin": "Ubicación", phone: "Teléfono", mail: "Correo", globe: "Web",
-  camera: "Cámara", heart: "Corazón", "book-open": "Catálogo", truck: "Entrega",
+
+type Props = {
+  initial: CardInput;
+  mode: "create" | "edit";
+  /** Solo edición: updated_at original (control de concurrencia) y token de vista previa privada. */
+  updatedAt?: string;
+  previewToken?: string;
 };
 
-type Props = { initial: CardInput; mode: "create" | "edit" };
-
-export function CardForm({ initial, mode }: Props) {
+export function CardForm({ initial, mode, updatedAt, previewToken }: Props) {
   const router = useRouter();
-  const {
-    register, handleSubmit, setValue, setError, control, formState: { errors, isDirty },
-  } = useForm<CardInput>({ resolver: zodResolver(cardInputSchema), defaultValues: initial, mode: "onTouched" });
-  const { fields, append, remove } = useFieldArray({ control, name: "buttons" });
+  const methods = useForm<CardInput>({ resolver: zodResolver(cardInputSchema), defaultValues: initial, mode: "onTouched" });
+  const { register, handleSubmit, getValues, setValue, setError, reset, control, formState: { errors, isDirty } } = methods;
 
   const values = useWatch({ control }) as CardInput;
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const expectedRef = useRef(updatedAt);
   const [created, setCreated] = useState<{ id: string; slug: string } | null>(null);
+  const [conflict, setConflict] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
   const slugTouched = useRef(mode === "edit");
   const [suggested, setSuggested] = useState<string | null>(null);
 
-  // Slug automático desde el nombre mientras no se edite manualmente.
+  // Slug automático desde el nombre mientras no se edite manualmente (solo tarjetas nuevas).
   useEffect(() => {
     if (!slugTouched.current) setValue("slug", slugify(values.businessName), { shouldValidate: values.slug !== "" });
   }, [values.businessName, values.slug, setValue]);
@@ -80,12 +87,7 @@ export function CardForm({ initial, mode }: Props) {
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty, created]);
 
-  const err = (name: FieldPath<CardInput>) => {
-    const parts = name.split(".");
-    let node: unknown = errors;
-    for (const p of parts) node = (node as Record<string, unknown> | undefined)?.[p];
-    return (node as { message?: string } | undefined)?.message;
-  };
+  const err = (name: string) => fieldError(errors, name);
   const input = (name: FieldPath<CardInput>) => ({
     ...register(name),
     id: name,
@@ -100,56 +102,81 @@ export function CardForm({ initial, mode }: Props) {
     for (const [k, v] of Object.entries(PRESETS[key].values)) set(k as FieldPath<CardInput>, v);
   }
 
-  async function onSubmit(data: CardInput) {
-    if (savingRef.current) return;
+  async function persist(data: CardInput) {
+    if (savingRef.current) return; // doble clic / doble Enter
     savingRef.current = true;
     setSaving(true);
     setSuggested(null);
+    setNetworkError(false);
     try {
-      const result = mode === "create" ? await createCard(data) : await updateCard(data);
+      const result =
+        mode === "create" ? await saveCard("create", data) : await saveCard("update", data, expectedRef.current);
       if (!result.ok) {
         for (const [key, message] of Object.entries(result.fieldErrors ?? {})) {
           setError(key as FieldPath<CardInput>, { message });
         }
         if (result.suggestedSlug) setSuggested(result.suggestedSlug);
+        if (result.conflict) setConflict(true);
         toast.error(result.error);
         return;
       }
       if (mode === "create") {
-        setCreated(result.data);
+        setCreated({ id: result.data.id, slug: result.data.slug });
         window.scrollTo({ top: 0 });
       } else {
+        expectedRef.current = result.data.updatedAt;
+        reset(data); // el formulario queda "limpio" con lo guardado
         toast.success("Cambios guardados");
         router.refresh();
       }
     } catch {
-      toast.error("No se pudo guardar. Revisa tu conexión e intenta de nuevo.");
+      // Sin respuesta del servidor: no sabemos si se guardó. Los datos siguen en pantalla para reintentar.
+      setNetworkError(true);
+      toast.error("No se pudo guardar. Tus cambios no se confirmaron.");
     } finally {
       savingRef.current = false;
       setSaving(false);
     }
   }
 
+  function submit(status?: PublicationStatus) {
+    // Los botones sin destino se descartan antes de validar (filas iniciales vacías).
+    const current = getValues();
+    const nonEmpty = current.actions.filter((a) => a.value.trim() !== "");
+    if (nonEmpty.length !== current.actions.length) set("actions", nonEmpty);
+    if (status) setValue("publicationStatus", status, { shouldDirty: true });
+    void handleSubmit(persist, () => toast.error("Revisa los campos marcados en rojo."))();
+  }
+
   if (created) {
     const url = cardUrl(created.slug);
+    const status = getValues("publicationStatus");
+    const live = status === "active";
     return (
       <div className="mx-auto max-w-xl rounded-2xl border border-line bg-surface p-8">
         <span className="flex size-11 items-center justify-center rounded-full bg-[#e3f3ec] text-[#116149]">
           <Check size={22} aria-hidden="true" />
         </span>
         <h1 className="mt-4 text-xl font-semibold tracking-tight">Tarjeta creada</h1>
-        <p className="mt-1 text-sm text-muted">Ya está disponible en esta dirección:</p>
+        <p className="mt-1 text-sm text-muted">
+          {live ? "Ya está disponible en esta dirección:" : `Quedó como “${PUBLICATION_LABELS[status]}”. Su dirección será:`}
+        </p>
         <p className="mt-3 break-all rounded-lg bg-paper px-3 py-2.5 font-mono text-sm">{url}</p>
         <div className="mt-5 flex flex-wrap gap-2">
           <CopyButton value={url} label="Copiar" />
-          <Link href={`/${created.slug}`} target="_blank" className="btn">
-            <ExternalLink size={15} aria-hidden="true" /> Ver
-          </Link>
+          {live ? (
+            <Link href={`/${created.slug}`} target="_blank" className="btn">
+              <ExternalLink size={15} aria-hidden="true" /> Ver
+            </Link>
+          ) : null}
           <Link href={`/admin/cards/${created.id}/edit`} className="btn">
             <Pencil size={15} aria-hidden="true" /> Editar
           </Link>
           <a href={`/api/qr/${created.slug}?format=png&download=1`} className="btn">
-            <Download size={15} aria-hidden="true" /> Descargar QR
+            <Download size={15} aria-hidden="true" /> QR PNG
+          </a>
+          <a href={`/api/qr/${created.slug}?format=svg&download=1`} className="btn">
+            <Download size={15} aria-hidden="true" /> QR SVG
           </a>
         </div>
         <div className="mt-6 flex gap-4 border-t border-line pt-5 text-sm">
@@ -162,208 +189,226 @@ export function CardForm({ initial, mode }: Props) {
     );
   }
 
-  const logoUrl = values.logoUrl;
+  const textContrast = contrastRatio(values.textColor, values.backgroundColor);
+
   return (
-    <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} noValidate className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="flex min-w-0 flex-col gap-5">
-        <Section title="Negocio">
-          <Field label="Nombre del negocio" htmlFor="businessName" error={err("businessName")}>
-            <input {...input("businessName")} autoComplete="off" placeholder="Barbería Carlos" />
-          </Field>
-          <Field label="Slug (dirección)" htmlFor="slug" error={err("slug")} hint={`${cardUrl(values.slug || "tu-slug")}`}>
-            <input
-              {...input("slug")}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => {
-                slugTouched.current = true;
-                set("slug", slugify(e.target.value));
-              }}
-            />
-            {suggested ? (
-              <button type="button" className="self-start text-xs font-medium text-brand hover:underline" onClick={() => { slugTouched.current = true; set("slug", suggested); setSuggested(null); }}>
-                Usar {suggested}
-              </button>
-            ) : null}
-          </Field>
-          <Field label="Categoría" htmlFor="category" error={err("category")}>
-            <input {...input("category")} list="category-list" placeholder="Barbería" />
-            <datalist id="category-list">
-              {CATEGORIES.map((c) => <option key={c} value={c} />)}
-            </datalist>
-          </Field>
-          <Field label="Descripción" htmlFor="description" error={err("description")} wide>
-            <textarea {...input("description")} rows={2} placeholder="Cortes clásicos, fade y barba con navaja." />
-          </Field>
-        </Section>
+    <FormProvider {...methods}>
+      <form onSubmit={(e) => { e.preventDefault(); submit(); }} noValidate className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-w-0 flex-col gap-5">
+          {conflict ? (
+            <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-[#f0c36d] bg-[#fdf3e2] p-4 text-sm text-warn">
+              <TriangleAlert size={18} aria-hidden="true" />
+              <span className="flex-1">Esta tarjeta cambió en otra sesión y tus cambios no se guardaron.</span>
+              <button type="button" className="btn btn-sm" onClick={() => window.location.reload()}>Recargar</button>
+            </div>
+          ) : null}
+          {networkError ? (
+            <div role="alert" className="flex items-center gap-3 rounded-xl border border-[#f0c36d] bg-[#fdf3e2] p-4 text-sm text-warn">
+              <TriangleAlert size={18} aria-hidden="true" />
+              No se pudo guardar. Tus cambios no se confirmaron; siguen aquí para que reintentes.
+            </div>
+          ) : null}
 
-        <Section title="Contacto">
-          <Field label="Teléfono" htmlFor="phone" error={err("phone")}>
-            <input {...input("phone")} inputMode="tel" placeholder="55 1234 5678" />
-          </Field>
-          <Field label="WhatsApp" htmlFor="whatsapp" error={err("whatsapp")} hint="10 dígitos; se agrega el código de México (52) automáticamente.">
-            <input {...input("whatsapp")} inputMode="tel" placeholder="55 1234 5678" />
-          </Field>
-          <Field label="Mensaje inicial de WhatsApp (opcional)" htmlFor="whatsappMessage" error={err("whatsappMessage")} wide>
-            <input {...input("whatsappMessage")} placeholder="Hola, quiero agendar una cita" />
-          </Field>
-        </Section>
+          <Section title="Negocio">
+            <Field label="Nombre del negocio" htmlFor="businessName" error={err("businessName")}>
+              <input {...input("businessName")} autoComplete="off" placeholder="Barbería Carlos" maxLength={80} />
+            </Field>
+            <Field label="Slug (dirección)" htmlFor="slug" error={err("slug")} hint={cardUrl(values.slug || "tu-slug")}>
+              <input
+                {...input("slug")}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => {
+                  slugTouched.current = true;
+                  set("slug", slugify(e.target.value));
+                }}
+              />
+              {suggested ? (
+                <button type="button" className="self-start text-xs font-medium text-brand hover:underline" onClick={() => { slugTouched.current = true; set("slug", suggested); setSuggested(null); }}>
+                  Usar {suggested}
+                </button>
+              ) : null}
+              {mode === "edit" && values.slug !== initial.slug && values.slug ? (
+                <p className="text-xs text-muted">La dirección anterior (/{initial.slug}) seguirá funcionando con una redirección.</p>
+              ) : null}
+            </Field>
+            <Field label="Categoría" htmlFor="category" error={err("category")}>
+              <input {...input("category")} list="category-list" placeholder="Barbería" />
+              <datalist id="category-list">
+                {CATEGORIES.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </Field>
+            <Field label="Cliente (uso interno)" htmlFor="customerName" error={err("customerName")} hint="Agrupa sucursales del mismo cliente en el panel.">
+              <input {...input("customerName")} placeholder="Carlos Pérez" />
+            </Field>
+            <Field label="Descripción" htmlFor="description" error={err("description")} wide hint={`${values.description?.length ?? 0}/400`}>
+              <textarea {...input("description")} rows={2} maxLength={400} placeholder="Cortes clásicos, fade y barba con navaja." />
+            </Field>
+          </Section>
 
-        <Section title="Redes y enlaces">
-          <Field label="Instagram" htmlFor="instagramUrl" error={err("instagramUrl")} hint="@usuario o URL">
-            <input {...input("instagramUrl")} autoCapitalize="none" placeholder="@barberiacarlos" />
-          </Field>
-          <Field label="Facebook" htmlFor="facebookUrl" error={err("facebookUrl")} hint="Nombre de página o URL">
-            <input {...input("facebookUrl")} autoCapitalize="none" placeholder="barberiacarlos" />
-          </Field>
-          <Field label="Google Maps" htmlFor="googleMapsUrl" error={err("googleMapsUrl")} hint="Si lo dejas vacío se usa la dirección.">
-            <input {...input("googleMapsUrl")} inputMode="url" placeholder="https://maps.app.goo.gl/..." />
-          </Field>
-          <Field label="URL de agenda" htmlFor="bookingUrl" error={err("bookingUrl")}>
-            <input {...input("bookingUrl")} inputMode="url" placeholder="https://calendly.com/..." />
-          </Field>
-          <Field label="Sitio web" htmlFor="websiteUrl" error={err("websiteUrl")}>
-            <input {...input("websiteUrl")} inputMode="url" placeholder="https://" />
-          </Field>
-          <Field label="Dirección" htmlFor="address" error={err("address")}>
-            <input {...input("address")} placeholder="Av. Juárez 120, Centro" />
-          </Field>
-          <Field label="Horario" htmlFor="schedule" error={err("schedule")}>
-            <input {...input("schedule")} placeholder="Lun a Sáb 10:00 - 20:00" />
-          </Field>
-          <Field label="Información adicional" htmlFor="extraInfo" error={err("extraInfo")}>
-            <input {...input("extraInfo")} placeholder="Estacionamiento gratuito" />
-          </Field>
-        </Section>
+          <Section title="Botones" hint="Se muestran en este orden; el primero es el botón destacado. WhatsApp, Maps, enlaces, PDF... los que necesites.">
+            <ActionsEditor cardId={values.id} />
+          </Section>
 
-        <Section title="Botones personalizados" hint={`Hasta ${MAX_CUSTOM_BUTTONS}: menú, promociones, catálogo, pedidos...`}>
-          <div className="flex flex-col gap-3 sm:col-span-2">
-            {fields.map((field, i) => (
-              <div key={field.id} className="grid gap-2 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1.4fr_9rem_auto]">
-                <div>
-                  <input aria-label={`Texto del botón ${i + 1}`} placeholder="Menú" className="field" aria-invalid={err(`buttons.${i}.label`) ? true : undefined} {...register(`buttons.${i}.label`)} />
-                  {err(`buttons.${i}.label`) ? <p role="alert" className="mt-1 text-xs text-danger">{err(`buttons.${i}.label`)}</p> : null}
-                </div>
-                <div>
-                  <input aria-label={`URL del botón ${i + 1}`} placeholder="https://" inputMode="url" className="field" aria-invalid={err(`buttons.${i}.url`) ? true : undefined} {...register(`buttons.${i}.url`)} />
-                  {err(`buttons.${i}.url`) ? <p role="alert" className="mt-1 text-xs text-danger">{err(`buttons.${i}.url`)}</p> : null}
-                </div>
-                <select aria-label={`Icono del botón ${i + 1}`} className="field" {...register(`buttons.${i}.icon`)}>
-                  {BUTTON_ICONS.map((icon) => <option key={icon} value={icon}>{ICON_LABELS[icon] ?? icon}</option>)}
-                </select>
-                <div className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-1.5 text-xs">
-                    <input type="checkbox" {...register(`buttons.${i}.isActive`)} /> Visible
-                  </label>
-                  <button type="button" className="btn btn-sm btn-icon" onClick={() => remove(i)} aria-label={`Eliminar botón ${i + 1}`}>
-                    <Trash2 size={14} aria-hidden="true" />
+          <Section title="Información del negocio" hint="Todo es opcional: lo que quede vacío no se muestra.">
+            <Field label="Dirección" htmlFor="address" error={err("address")}>
+              <input {...input("address")} placeholder="Av. Juárez 120, Centro" />
+            </Field>
+            <Field label="Nota de horario (opcional)" htmlFor="schedule" error={err("schedule")}>
+              <input {...input("schedule")} placeholder="Abrimos días festivos con cita" />
+            </Field>
+            <Field label="Información adicional" htmlFor="extraInfo" error={err("extraInfo")} wide>
+              <input {...input("extraInfo")} placeholder="Estacionamiento gratuito" />
+            </Field>
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <span className="text-sm font-medium">Horario semanal</span>
+              <HoursEditor idPrefix="hours" value={values.hours ?? null} onChange={(h) => set("hours", h)} />
+            </div>
+          </Section>
+
+          <Section title="Sucursales" hint="Para negocios con varias ubicaciones. Cada una con su dirección, contacto y horario.">
+            <BranchesEditor />
+          </Section>
+
+          <Section title="Diseño" hint="Elige un preset y ajusta lo que necesites.">
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <span className="text-sm font-medium">Presets</span>
+              <div className="flex flex-wrap gap-2">
+                {PRESET_KEYS.map((key) => (
+                  <button key={key} type="button" onClick={() => applyPreset(key)} className="btn btn-sm gap-2">
+                    <span aria-hidden="true" className="flex">
+                      {[PRESETS[key].values.primaryColor, PRESETS[key].values.accentColor, PRESETS[key].values.backgroundColor].map((c, idx) => (
+                        <span key={idx} className="-ml-1 size-3.5 rounded-full border border-black/10 first:ml-0" style={{ background: c }} />
+                      ))}
+                    </span>
+                    {PRESETS[key].label}
                   </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <span className="text-sm font-medium">Template</span>
+              <div role="radiogroup" aria-label="Template" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {TEMPLATES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="radio"
+                    aria-checked={values.template === t}
+                    onClick={() => set("template", t)}
+                    className={`rounded-lg border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${values.template === t ? "border-brand bg-[#e9f3f1]" : "border-line hover:bg-paper"}`}
+                  >
+                    <span className="block text-sm font-semibold">{TEMPLATE_LABELS[t]}</span>
+                    <span className="block text-xs text-muted">{TEMPLATE_HINTS[t]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 sm:col-span-2 sm:grid-cols-3">
+              <ColorField id="primaryColor" label="Principal" value={values.primaryColor} onChange={(v) => set("primaryColor", v)} />
+              <ColorField id="accentColor" label="Acento (botón destacado)" value={values.accentColor} onChange={(v) => set("accentColor", v)} />
+              <ColorField id="secondaryColor" label="Secundario" value={values.secondaryColor} onChange={(v) => set("secondaryColor", v)} />
+              <ColorField id="backgroundColor" label="Fondo" value={values.backgroundColor} onChange={(v) => set("backgroundColor", v)} />
+              <ColorField id="textColor" label="Texto" value={values.textColor} onChange={(v) => set("textColor", v)} />
+            </div>
+            {textContrast < 4.5 ? (
+              <p role="status" className="flex items-start gap-2 rounded-lg bg-[#fdf3e2] p-3 text-xs text-warn sm:col-span-2">
+                <TriangleAlert size={15} aria-hidden="true" className="mt-px shrink-0" />
+                El texto y el fondo tienen poco contraste ({textContrast.toFixed(1)}:1; se recomienda 4.5:1 o más). Puedes dejarlo así, pero puede ser difícil de leer.
+              </p>
+            ) : null}
+
+            <ChoiceRow label="Estructura de cabecera"><Segmented name="Estructura" value={values.layoutVariant} options={opts(LAYOUT_VARIANTS, LAYOUT_LABELS)} onChange={(v) => set("layoutVariant", v)} /></ChoiceRow>
+            <ChoiceRow label="Botones"><Segmented name="Disposición de botones" value={values.actionsLayout} options={opts(ACTIONS_LAYOUTS, ACTIONS_LABELS)} onChange={(v) => set("actionsLayout", v)} /></ChoiceRow>
+            <ChoiceRow label="Estilo de botón"><Segmented name="Estilo de botón" value={values.buttonStyle} options={opts(BUTTON_STYLES, BUTTON_STYLE_LABELS)} onChange={(v) => set("buttonStyle", v)} /></ChoiceRow>
+            <ChoiceRow label="Bordes"><Segmented name="Bordes" value={values.borderRadius} options={opts(BORDER_RADII, RADIUS_LABELS)} onChange={(v) => set("borderRadius", v)} /></ChoiceRow>
+            <ChoiceRow label="Sombra"><Segmented name="Sombra" value={values.shadowStyle} options={opts(SHADOW_STYLES, SHADOW_LABELS)} onChange={(v) => set("shadowStyle", v)} /></ChoiceRow>
+            <Field label="Tipografía" htmlFor="font">
+              <select {...register("font")} id="font" className="field">
+                {FONTS.map((f) => <option key={f} value={f}>{FONT_LABELS[f]}</option>)}
+              </select>
+            </Field>
+            <div className="flex items-end">
+              <Toggle id="showQr" label="Mostrar QR en la tarjeta" checked={values.showQr} onChange={(v) => set("showQr", v)} />
+            </div>
+          </Section>
+
+          <Section title="Imágenes">
+            <ImageUploader
+              cardId={values.id} kind="logo" label="Logo" value={values.logoUrl} maxDimension={768}
+              onChange={(u, ratio) => { set("logoUrl", u); set("logoRatio", ratio ?? 1); }}
+            />
+            <ImageUploader cardId={values.id} kind="cover" label="Portada (estructura “Portada”)" value={values.coverImageUrl} onChange={(u) => set("coverImageUrl", u)} />
+            <ChoiceRow label="Tamaño del logo"><Segmented name="Tamaño del logo" value={values.logoSize} options={opts(LOGO_SIZES, SIZE_LABELS)} onChange={(v) => set("logoSize", v)} /></ChoiceRow>
+            <ChoiceRow label="Forma del logo (logos cuadrados)"><Segmented name="Forma del logo" value={values.logoShape} options={opts(LOGO_SHAPES, SHAPE_LABELS)} onChange={(v) => set("logoShape", v)} /></ChoiceRow>
+            <ChoiceRow label="Fondo de la página">
+              <Segmented name="Fondo" value={values.backgroundMode} options={[{ value: "color", label: "Color" }, { value: "image", label: "Imagen" }]} onChange={(v) => set("backgroundMode", v)} />
+            </ChoiceRow>
+            {values.backgroundMode === "image" ? (
+              <>
+                <ImageUploader cardId={values.id} kind="background" label="Imagen de fondo" value={values.backgroundImageUrl} onChange={(u) => set("backgroundImageUrl", u)} />
+                <Field label={`Capa de color sobre la imagen: ${values.backgroundOverlay}%`} htmlFor="backgroundOverlay">
+                  <input id="backgroundOverlay" type="range" min={0} max={90} step={5} {...register("backgroundOverlay", { valueAsNumber: true })} className="accent-brand" />
+                </Field>
+              </>
+            ) : null}
+          </Section>
+
+          <Section title="Estado">
+            <Field label="Publicación" htmlFor="publicationStatus" hint={PUBLICATION_HINTS[values.publicationStatus]}>
+              <select {...register("publicationStatus")} id="publicationStatus" className="field">
+                {PUBLICATION_STATUSES.map((s) => <option key={s} value={s}>{PUBLICATION_LABELS[s]}</option>)}
+              </select>
+            </Field>
+            <Field label="Pago" htmlFor="paymentStatus" hint="Control interno. No cambia la visibilidad.">
+              <select {...register("paymentStatus")} id="paymentStatus" className="field">
+                {PAYMENT_STATUSES.map((s) => <option key={s} value={s}>{PAYMENT_LABELS[s]}</option>)}
+              </select>
+            </Field>
+            {mode === "edit" && previewToken ? (
+              <div className="flex flex-col gap-2 sm:col-span-2">
+                <span className="text-sm font-medium">Vista previa privada</span>
+                <p className="text-xs text-muted">Enlace secreto para que el cliente vea la tarjeta antes de publicarla.</p>
+                <div className="flex flex-wrap gap-2">
+                  <CopyButton value={`${typeof window === "undefined" ? "" : window.location.origin}/p/${previewToken}`} label="Copiar enlace" />
+                  <Link href={`/p/${previewToken}`} target="_blank" className="btn">
+                    <Eye size={15} aria-hidden="true" /> Abrir vista previa
+                  </Link>
                 </div>
               </div>
-            ))}
-            {fields.length < MAX_CUSTOM_BUTTONS ? (
-              <button type="button" className="btn btn-sm self-start" onClick={() => append({ label: "", url: "", icon: "link", isActive: true })}>
-                <Plus size={14} aria-hidden="true" /> Agregar botón
-              </button>
             ) : null}
-          </div>
-        </Section>
+          </Section>
 
-        <Section title="Diseño" hint="Elige un preset y ajusta lo que necesites.">
-          <div className="flex flex-col gap-2 sm:col-span-2">
-            <span className="text-sm font-medium">Presets</span>
-            <div className="flex flex-wrap gap-2">
-              {PRESET_KEYS.map((key) => (
-                <button key={key} type="button" onClick={() => applyPreset(key)} className="btn btn-sm gap-2">
-                  <span aria-hidden="true" className="flex">
-                    {[PRESETS[key].values.primaryColor, PRESETS[key].values.accentColor, PRESETS[key].values.backgroundColor].map((c, idx) => (
-                      <span key={idx} className="-ml-1 size-3.5 rounded-full border border-black/10 first:ml-0" style={{ background: c }} />
-                    ))}
-                  </span>
-                  {PRESETS[key].label}
+          <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur-sm">
+            <span className="text-xs text-muted" aria-live="polite">
+              {saving ? "Guardando..." : isDirty ? "Cambios sin guardar" : mode === "edit" ? "Todo guardado" : ""}
+            </span>
+            <div className="flex gap-2">
+              {mode === "create" ? (
+                <button type="button" disabled={saving} className="btn" onClick={() => submit("draft")}>
+                  Guardar borrador
                 </button>
-              ))}
+              ) : null}
+              <button
+                type="button"
+                disabled={saving}
+                className="btn btn-primary min-w-44"
+                onClick={() => submit(mode === "create" ? "active" : undefined)}
+              >
+                {saving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : null}
+                {saving ? "Guardando..." : mode === "create" ? "Guardar y publicar" : "Guardar cambios"}
+              </button>
             </div>
           </div>
-
-          <div className="flex flex-col gap-2 sm:col-span-2">
-            <span className="text-sm font-medium">Template</span>
-            <div role="radiogroup" aria-label="Template" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {TEMPLATES.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  role="radio"
-                  aria-checked={values.template === t}
-                  onClick={() => set("template", t)}
-                  className={`rounded-lg border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${values.template === t ? "border-brand bg-[#e9f3f1]" : "border-line hover:bg-paper"}`}
-                >
-                  <span className="block text-sm font-semibold">{TEMPLATE_LABELS[t]}</span>
-                  <span className="block text-xs text-muted">{TEMPLATE_HINTS[t]}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 sm:col-span-2 sm:grid-cols-3">
-            <ColorField id="primaryColor" label="Principal" value={values.primaryColor} onChange={(v) => set("primaryColor", v)} />
-            <ColorField id="accentColor" label="Acento (CTA)" value={values.accentColor} onChange={(v) => set("accentColor", v)} />
-            <ColorField id="secondaryColor" label="Secundario" value={values.secondaryColor} onChange={(v) => set("secondaryColor", v)} />
-            <ColorField id="backgroundColor" label="Fondo" value={values.backgroundColor} onChange={(v) => set("backgroundColor", v)} />
-            <ColorField id="textColor" label="Texto" value={values.textColor} onChange={(v) => set("textColor", v)} />
-          </div>
-
-          <ChoiceRow label="Estructura de cabecera"><Segmented name="Estructura" value={values.layoutVariant} options={opts(LAYOUT_VARIANTS, LAYOUT_LABELS)} onChange={(v) => set("layoutVariant", v)} /></ChoiceRow>
-          <ChoiceRow label="Acciones"><Segmented name="Acciones" value={values.actionsLayout} options={opts(ACTIONS_LAYOUTS, ACTIONS_LABELS)} onChange={(v) => set("actionsLayout", v)} /></ChoiceRow>
-          <ChoiceRow label="Estilo de botón"><Segmented name="Estilo de botón" value={values.buttonStyle} options={opts(BUTTON_STYLES, BUTTON_STYLE_LABELS)} onChange={(v) => set("buttonStyle", v)} /></ChoiceRow>
-          <ChoiceRow label="Bordes"><Segmented name="Bordes" value={values.borderRadius} options={opts(BORDER_RADII, RADIUS_LABELS)} onChange={(v) => set("borderRadius", v)} /></ChoiceRow>
-          <ChoiceRow label="Sombra"><Segmented name="Sombra" value={values.shadowStyle} options={opts(SHADOW_STYLES, SHADOW_LABELS)} onChange={(v) => set("shadowStyle", v)} /></ChoiceRow>
-          <Field label="Tipografía" htmlFor="font">
-            <select {...register("font")} id="font" className="field">
-              {FONTS.map((f) => <option key={f} value={f}>{FONT_LABELS[f]}</option>)}
-            </select>
-          </Field>
-          <div className="flex items-end">
-            <Toggle id="showQr" label="Mostrar QR en la tarjeta" checked={values.showQr} onChange={(v) => set("showQr", v)} />
-          </div>
-        </Section>
-
-        <Section title="Imágenes">
-          <ImageUploader cardId={values.id} kind="logo" label="Logo" value={logoUrl} maxDimension={512} onChange={(u) => set("logoUrl", u)} />
-          <ImageUploader cardId={values.id} kind="cover" label="Portada (estructura “Portada”)" value={values.coverImageUrl} onChange={(u) => set("coverImageUrl", u)} />
-          <ChoiceRow label="Tamaño del logo"><Segmented name="Tamaño del logo" value={values.logoSize} options={opts(LOGO_SIZES, SIZE_LABELS)} onChange={(v) => set("logoSize", v)} /></ChoiceRow>
-          <ChoiceRow label="Forma del logo"><Segmented name="Forma del logo" value={values.logoShape} options={opts(LOGO_SHAPES, SHAPE_LABELS)} onChange={(v) => set("logoShape", v)} /></ChoiceRow>
-          <ChoiceRow label="Fondo de la página">
-            <Segmented name="Fondo" value={values.backgroundMode} options={[{ value: "color", label: "Color" }, { value: "image", label: "Imagen" }]} onChange={(v) => set("backgroundMode", v)} />
-          </ChoiceRow>
-          {values.backgroundMode === "image" ? (
-            <>
-              <ImageUploader cardId={values.id} kind="background" label="Imagen de fondo" value={values.backgroundImageUrl} onChange={(u) => set("backgroundImageUrl", u)} />
-              <Field label={`Capa de color sobre la imagen: ${values.backgroundOverlay}%`} htmlFor="backgroundOverlay">
-                <input id="backgroundOverlay" type="range" min={0} max={90} step={5} {...register("backgroundOverlay", { valueAsNumber: true })} className="accent-brand" />
-              </Field>
-            </>
-          ) : null}
-        </Section>
-
-        <Section title="Estado">
-          <Toggle id="isActive" label="Activa" description="Visible para el público en su dirección." checked={values.isActive} onChange={(v) => set("isActive", v)} />
-          <Toggle id="isPaid" label="Pagada" description="Solo control interno; no cambia la visibilidad." checked={values.isPaid} onChange={(v) => set("isPaid", v)} />
-        </Section>
-
-        <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur-sm">
-          <span className="text-xs text-muted">{isDirty ? "Cambios sin guardar" : mode === "edit" ? "Todo guardado" : ""}</span>
-          <button type="submit" disabled={saving} className="btn btn-primary min-w-44">
-            {saving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : null}
-            {saving ? "Guardando..." : mode === "create" ? "Guardar y publicar" : "Guardar cambios"}
-          </button>
         </div>
-      </div>
 
-      <aside id="preview" aria-label="Vista previa" className="lg:sticky lg:top-20 lg:self-start">
-        <CardPreview values={values} />
-      </aside>
-    </form>
+        <aside id="preview" aria-label="Vista previa" className="lg:sticky lg:top-20 lg:self-start">
+          <CardPreview values={values} />
+        </aside>
+      </form>
+    </FormProvider>
   );
 }
 

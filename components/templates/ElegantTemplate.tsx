@@ -2,7 +2,7 @@ import { buildActions } from "@/lib/cards/actions-builder";
 import { CardActions } from "@/components/card/CardActions";
 import { CardFooter } from "@/components/card/CardFooter";
 import { CardHeader } from "@/components/card/CardHeader";
-import { CardInfo } from "@/components/card/CardInfo";
+import { CardDetails } from "@/components/card/CardDetails";
 import { CardQr } from "@/components/card/CardQr";
 import { CardSocialLinks } from "@/components/card/CardSocialLinks";
 import type { TemplateProps } from "./types";
@@ -32,7 +32,7 @@ export function ElegantTemplate({ data, qrSrc }: TemplateProps) {
           <div className="flex flex-col gap-7 px-5 pb-4 pt-7">
             <Rule />
             <CardActions actions={main} data={data} />
-            <CardInfo data={data} variant="plain" className="text-center" />
+            <CardDetails data={data} variant="plain" className="text-center" />
             <Rule />
             <CardSocialLinks links={social} className="justify-center" />
             {data.showQr ? <CardQr src={qrSrc} businessName={data.businessName} /> : null}

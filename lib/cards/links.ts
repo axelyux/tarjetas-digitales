@@ -11,6 +11,12 @@ export function normalizeWhatsapp(value: string): string {
   return digits;
 }
 
+export function isValidPhoneNumber(value: string): boolean {
+  if (!/^[+\d\s().-]+$/.test(value)) return false;
+  const n = onlyDigits(value).length;
+  return n >= 8 && n <= 15;
+}
+
 export function whatsappLink(whatsapp: string, message?: string): string {
   const base = `https://wa.me/${normalizeWhatsapp(whatsapp)}`;
   return message ? `${base}?text=${encodeURIComponent(message)}` : base;
@@ -31,28 +37,49 @@ export function isHttpUrl(value: string): boolean {
   }
 }
 
-function handleOf(value: string): string {
-  return value.trim().replace(/^@/, "").replace(/\/+$/, "");
-}
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+const BARE_DOMAIN = /^[\w-]+(\.[\w-]+)+([/?#:].*)?$/;
 
-/** Acepta "@usuario", "usuario" o una URL completa. */
-export function normalizeInstagram(value: string): string {
-  const v = value.trim();
-  if (isHttpUrl(v)) return v;
-  return `https://instagram.com/${handleOf(v)}`;
-}
-
-export function normalizeFacebook(value: string): string {
-  const v = value.trim();
-  if (isHttpUrl(v)) return v;
-  return `https://facebook.com/${handleOf(v)}`;
+/**
+ * Devuelve una URL http(s) segura o null.
+ * - "instagram.com/negocio" -> "https://instagram.com/negocio"
+ * - cualquier otro esquema (javascript:, data:, vbscript:, file:...) -> null
+ */
+export function normalizeUrlInput(raw: string): string | null {
+  const v = raw.trim();
+  if (!v || /\s/.test(v)) return null;
+  if (HAS_SCHEME.test(v)) return isHttpUrl(v) ? v : null;
+  if (!BARE_DOMAIN.test(v)) return null;
+  const candidate = `https://${v}`;
+  return isHttpUrl(candidate) ? candidate : null;
 }
 
 const HANDLE_REGEX = /^@?[A-Za-z0-9._-]{2,60}$/;
-export function isSocialInput(value: string): boolean {
-  return isHttpUrl(value) || HANDLE_REGEX.test(value);
+const EMAIL_REGEX = /^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+
+export function isEmail(value: string): boolean {
+  return EMAIL_REGEX.test(value.trim());
 }
 
 export function mapsLinkFromAddress(address: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
+/** Acepta un @usuario o una URL; devuelve URL segura o null. */
+export function socialHref(value: string, base: string): string | null {
+  const v = value.trim();
+  const isHandle = v.startsWith("@") ? HANDLE_REGEX.test(v) : HANDLE_REGEX.test(v) && !BARE_DOMAIN.test(v);
+  if (isHandle) return `${base}${v.replace(/^@/, "")}`;
+  return normalizeUrlInput(v);
+}
+
+/** Maps: URL o direccion escrita. */
+export function mapsHref(value: string): string | null {
+  const v = value.trim();
+  if (v.length < 3) return null;
+  const asUrl = normalizeUrlInput(v);
+  if (asUrl) return asUrl;
+  if (HAS_SCHEME.test(v) && !/\s/.test(v)) return null; // esquema peligroso sin espacios (javascript:...)
+  if (/^(javascript|data|vbscript|file):/i.test(v)) return null;
+  return mapsLinkFromAddress(v);
 }

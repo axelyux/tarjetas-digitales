@@ -2,7 +2,7 @@ import { buildActions } from "@/lib/cards/actions-builder";
 import { CardActions } from "@/components/card/CardActions";
 import { CardFooter } from "@/components/card/CardFooter";
 import { CardHeader } from "@/components/card/CardHeader";
-import { CardInfo } from "@/components/card/CardInfo";
+import { CardDetails } from "@/components/card/CardDetails";
 import { CardQr } from "@/components/card/CardQr";
 import { CardSocialLinks } from "@/components/card/CardSocialLinks";
 import type { TemplateProps } from "./types";
@@ -16,7 +16,7 @@ export function MinimalTemplate({ data, qrSrc }: TemplateProps) {
         <CardHeader data={data} nameClassName="tracking-tight" />
         <div className="flex flex-col gap-8 px-5 pb-6 pt-8">
           <CardActions actions={main} data={data} presentation="rows" />
-          <CardInfo data={data} variant="plain" />
+          <CardDetails data={data} variant="plain" />
           <CardSocialLinks links={social} variant="text" className="gap-5" />
           {data.showQr ? <CardQr src={qrSrc} businessName={data.businessName} className="items-start" /> : null}
         </div>

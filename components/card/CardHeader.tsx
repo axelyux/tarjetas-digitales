@@ -14,17 +14,17 @@ export function CardHeader({ data, nameClassName = "", categoryClassName = "", d
   const variant = data.layoutVariant;
 
   const name = (
-    <h1 className={`cd-rise text-balance font-bold leading-tight ${variant === "compact" ? "text-xl" : "text-2xl"} ${nameClassName}`} style={{ "--i": 1 } as React.CSSProperties}>
+    <h1 className={`cd-rise max-w-full text-balance font-bold leading-tight [overflow-wrap:anywhere] ${variant === "compact" ? "text-xl" : "text-2xl"} ${nameClassName}`} style={{ "--i": 1 } as React.CSSProperties}>
       {data.businessName}
     </h1>
   );
   const category = data.category ? (
-    <p className={`cd-rise cd-muted text-xs font-medium uppercase tracking-[0.14em] ${categoryClassName}`} style={{ "--i": 2 } as React.CSSProperties}>
+    <p className={`cd-rise cd-muted max-w-full text-xs font-medium uppercase tracking-[0.14em] [overflow-wrap:anywhere] ${categoryClassName}`} style={{ "--i": 2 } as React.CSSProperties}>
       {data.category}
     </p>
   ) : null;
   const description = data.description ? (
-    <p className={`cd-rise cd-muted max-w-[34ch] text-pretty text-[0.95rem] ${descriptionClassName}`} style={{ "--i": 3 } as React.CSSProperties}>
+    <p className={`cd-rise cd-muted max-w-[34ch] whitespace-pre-line text-pretty text-[0.95rem] [overflow-wrap:anywhere] ${descriptionClassName}`} style={{ "--i": 3 } as React.CSSProperties}>
       {data.description}
     </p>
   ) : null;

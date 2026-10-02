@@ -1,15 +1,33 @@
 import type {
-  ActionsLayout, BackgroundMode, BorderRadius, ButtonIcon, ButtonStyle, CardStyle, FontKey,
-  LayoutVariant, LogoShape, LogoSize, ShadowStyle, Template,
+  ActionType, ActionsLayout, BackgroundMode, BorderRadius, ButtonIcon, ButtonStyle, CardStyle, FontKey,
+  LayoutVariant, LogoShape, LogoSize, PaymentStatus, PublicationStatus, ShadowStyle, Template,
 } from "./constants";
+import type { Hours } from "./hours";
 
-export type CardButton = {
+export type ActionMetadata = { message?: string };
+
+/** Acción configurable de la tarjeta (WhatsApp, enlace, PDF...). Cualquier cantidad, cualquier orden. */
+export type CardAction = {
   id: string;
+  type: ActionType;
   label: string;
-  url: string;
+  value: string;
   icon: ButtonIcon;
-  position: number;
-  isActive: boolean;
+  metadata: ActionMetadata;
+  enabled: boolean;
+  sortOrder: number;
+};
+
+export type CardBranch = {
+  id: string;
+  name: string;
+  address?: string;
+  mapsUrl?: string;
+  phone?: string;
+  whatsapp?: string;
+  hours: Hours | null;
+  enabled: boolean;
+  sortOrder: number;
 };
 
 /** Datos que consumen la tarjeta publica, el preview y todos los templates. */
@@ -21,18 +39,11 @@ export type DigitalCardData = {
   address?: string;
   schedule?: string;
   extraInfo?: string;
+  hours: Hours | null;
 
   logoUrl?: string;
+  logoRatio: number;
   coverImageUrl?: string;
-
-  phone?: string;
-  whatsapp?: string;
-  whatsappMessage?: string;
-  instagramUrl?: string;
-  facebookUrl?: string;
-  googleMapsUrl?: string;
-  websiteUrl?: string;
-  bookingUrl?: string;
 
   primaryColor: string;
   secondaryColor: string;
@@ -55,15 +66,32 @@ export type DigitalCardData = {
   backgroundOverlay: number;
   showQr: boolean;
 
-  buttons: CardButton[];
+  actions: CardAction[];
+  branches: CardBranch[];
 };
 
 /** Tarjeta completa para el panel de administracion. */
 export type AdminCard = DigitalCardData & {
   id: string;
-  isActive: boolean;
-  isPaid: boolean;
+  customerName?: string;
+  publicationStatus: PublicationStatus;
+  paymentStatus: PaymentStatus;
+  previewToken: string;
   createdAt: string;
+  /** Texto original de Postgres (microsegundos): se usa para el control de concurrencia. */
   updatedAt: string;
   publishedAt?: string;
+};
+
+/** Fila ligera para el listado del panel. */
+export type AdminListItem = {
+  id: string;
+  slug: string;
+  businessName: string;
+  category?: string;
+  customerName?: string;
+  template: Template;
+  publicationStatus: PublicationStatus;
+  paymentStatus: PaymentStatus;
+  createdAt: string;
 };

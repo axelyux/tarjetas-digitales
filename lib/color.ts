@@ -15,3 +15,11 @@ export function luminance(hex: string): number {
 export function readableOn(hex: string): string {
   return luminance(hex) > 0.45 ? "#111111" : "#ffffff";
 }
+
+/** Relación de contraste WCAG entre dos colores #RRGGBB (1 a 21). */
+export function contrastRatio(a: string, b: string): number {
+  const la = luminance(a);
+  const lb = luminance(b);
+  const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+  return (hi + 0.05) / (lo + 0.05);
+}

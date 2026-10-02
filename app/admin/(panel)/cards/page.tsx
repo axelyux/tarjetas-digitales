@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
-import { ActiveBadge, PaidBadge } from "@/components/admin/StatusBadge";
+import { PaymentBadge, PublicationBadge } from "@/components/admin/StatusBadge";
 import { CardRowActions } from "@/components/admin/CardRowActions";
 import {
   CARD_FILTERS, CARD_SORTS, listCards, type CardFilter, type CardSort,
@@ -11,16 +11,18 @@ import { cardUrl } from "@/lib/site";
 type SearchParams = { q?: string; filter?: string; sort?: string; page?: string };
 
 const FILTER_LABELS: Record<CardFilter, string> = {
-  all: "Todas", active: "Activas", inactive: "Inactivas", paid: "Pagadas", pending: "Pendientes",
+  all: "Todas", active: "Activas", inactive: "Inactivas", draft: "Borradores",
+  pending: "Pendientes", paid: "Pagadas", archived: "Archivadas",
 };
-const SORT_LABELS: Record<CardSort, string> = { date: "Fecha", name: "Nombre", status: "Estado" };
+const SORT_LABELS: Record<CardSort, string> = { newest: "Más recientes", oldest: "Más antiguas", name: "Nombre", status: "Estado" };
 
 const dateFormat = new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+const COLS = "lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_6rem_6rem_5.5rem_6.5rem_auto]";
 
 export default async function CardsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
   const filter = CARD_FILTERS.find((f) => f === sp.filter) ?? "all";
-  const sort = CARD_SORTS.find((s) => s === sp.sort) ?? "date";
+  const sort = CARD_SORTS.find((s) => s === sp.sort) ?? "newest";
   const q = (sp.q ?? "").slice(0, 60);
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
 
@@ -28,10 +30,9 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
 
   const href = (patch: Partial<Record<keyof SearchParams, string>>) => {
     const params = new URLSearchParams();
-    const merged = { q, filter, sort, page: String(page), ...patch };
-    if (!("page" in patch)) merged.page = "1";
+    const merged = { q, filter, sort, page: "page" in patch ? String(patch.page) : "1", ...patch };
     for (const [k, v] of Object.entries(merged)) {
-      if (v && !(k === "filter" && v === "all") && !(k === "sort" && v === "date") && !(k === "page" && v === "1")) params.set(k, v);
+      if (v && !(k === "filter" && v === "all") && !(k === "sort" && v === "newest") && !(k === "page" && v === "1")) params.set(k, v);
     }
     const qs = params.toString();
     return qs ? `/admin/cards?${qs}` : "/admin/cards";
@@ -55,9 +56,9 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
         <form action="/admin/cards" className="relative max-w-md" role="search">
           <label htmlFor="q" className="sr-only">Buscar tarjetas</label>
           <Search size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-          <input id="q" name="q" defaultValue={q} placeholder="Buscar por nombre, slug, teléfono o categoría" className="field pl-9" />
+          <input id="q" name="q" defaultValue={q} placeholder="Buscar por nombre, slug, cliente, teléfono o categoría" className="field pl-9" />
           {filter !== "all" ? <input type="hidden" name="filter" value={filter} /> : null}
-          {sort !== "date" ? <input type="hidden" name="sort" value={sort} /> : null}
+          {sort !== "newest" ? <input type="hidden" name="sort" value={sort} /> : null}
         </form>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar">
@@ -67,7 +68,7 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
               </Link>
             ))}
           </div>
-          <div className="flex items-center gap-1.5" role="group" aria-label="Ordenar">
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Ordenar">
             <span className="text-xs text-muted">Ordenar:</span>
             {CARD_SORTS.map((s) => (
               <Link key={s} href={href({ sort: s })} className={chip(s === sort)} aria-current={s === sort ? "true" : undefined}>
@@ -79,29 +80,37 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
       </div>
 
       {result.cards.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-line p-10 text-center text-sm text-muted">
-          {q || filter !== "all" ? "No hay tarjetas que coincidan con la búsqueda." : "Aún no hay tarjetas."}
-        </p>
+        q || filter !== "all" ? (
+          <p className="rounded-xl border border-dashed border-line p-10 text-center text-sm text-muted">
+            No hay tarjetas que coincidan con la búsqueda.
+          </p>
+        ) : (
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line p-10 text-center">
+            <p className="text-sm text-muted">Todavía no tienes tarjetas.</p>
+            <Link href="/admin/cards/new" className="btn btn-primary">
+              <Plus size={16} aria-hidden="true" /> Crear tarjeta
+            </Link>
+          </div>
+        )
       ) : (
         <div className="rounded-xl border border-line bg-surface">
-          <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_5.5rem_5.5rem_5.5rem_6.5rem_auto] items-center gap-4 border-b border-line px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-muted lg:grid">
+          <div className={`hidden items-center gap-4 border-b border-line px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-muted lg:grid ${COLS}`}>
             <span>Nombre</span><span>Slug</span><span>Estado</span><span>Pago</span><span>Template</span><span>Fecha</span><span className="text-right">Acciones</span>
           </div>
           <ul className="divide-y divide-line">
             {result.cards.map((card) => (
-              <li
-                key={card.id}
-                className="grid items-center gap-x-4 gap-y-2 px-4 py-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_5.5rem_5.5rem_5.5rem_6.5rem_auto]"
-              >
+              <li key={card.id} className={`grid items-center gap-x-4 gap-y-2 px-4 py-3 ${COLS}`}>
                 <div className="min-w-0">
                   <Link href={`/admin/cards/${card.id}/edit`} className="block truncate text-sm font-medium hover:underline">
                     {card.businessName}
                   </Link>
-                  <span className="block truncate text-xs text-muted">{card.category ?? "Sin categoría"}</span>
+                  <span className="block truncate text-xs text-muted">
+                    {[card.customerName, card.category].filter(Boolean).join(" · ") || "Sin categoría"}
+                  </span>
                 </div>
                 <span className="truncate text-sm text-muted">/{card.slug}</span>
-                <span><ActiveBadge active={card.isActive} /></span>
-                <span><PaidBadge paid={card.isPaid} /></span>
+                <span><PublicationBadge status={card.publicationStatus} /></span>
+                <span><PaymentBadge status={card.paymentStatus} /></span>
                 <span className="text-sm text-muted">{TEMPLATE_LABELS[card.template]}</span>
                 <span className="text-sm text-muted">{dateFormat.format(new Date(card.createdAt))}</span>
                 <div className="lg:justify-self-end">

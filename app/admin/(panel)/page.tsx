@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { ActiveBadge, PaidBadge } from "@/components/admin/StatusBadge";
+import { PaymentBadge, PublicationBadge } from "@/components/admin/StatusBadge";
 import { DashboardStats } from "@/components/admin/DashboardStats";
 import { getRecentCards, getStats } from "@/lib/cards/admin-queries";
 import { TEMPLATE_LABELS } from "@/lib/cards/constants";
@@ -22,15 +22,23 @@ export default async function DashboardPage() {
       </div>
 
       <DashboardStats stats={stats} />
+      {stats.archived > 0 ? (
+        <p className="-mt-4 text-xs text-muted">
+          {stats.archived} archivada{stats.archived === 1 ? "" : "s"} (no cuentan en el total).
+        </p>
+      ) : null}
 
       <section aria-labelledby="recent-title">
         <h2 id="recent-title" className="mb-3 text-sm font-semibold">
           Últimas tarjetas creadas
         </h2>
         {recent.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-muted">
-            Aún no hay tarjetas. Crea la primera en menos de 3 minutos.
-          </p>
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line p-10 text-center">
+            <p className="text-sm text-muted">Todavía no tienes tarjetas.</p>
+            <Link href="/admin/cards/new" className="btn btn-primary">
+              <Plus size={16} aria-hidden="true" /> Crear tarjeta
+            </Link>
+          </div>
         ) : (
           <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
             {recent.map((card) => (
@@ -45,8 +53,8 @@ export default async function DashboardPage() {
                       /{card.slug} · {TEMPLATE_LABELS[card.template]}
                     </span>
                   </span>
-                  <ActiveBadge active={card.isActive} />
-                  <PaidBadge paid={card.isPaid} />
+                  <PublicationBadge status={card.publicationStatus} />
+                  <PaymentBadge status={card.paymentStatus} />
                 </Link>
               </li>
             ))}

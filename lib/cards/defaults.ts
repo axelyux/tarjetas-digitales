@@ -1,26 +1,29 @@
-import type { CardInput } from "./schema";
+import type { ActionInput, CardInput } from "./schema";
+import type { ActionType } from "./constants";
+
+export function emptyAction(type: ActionType): ActionInput {
+  return { type, label: "", value: "", icon: "link", message: "", enabled: true };
+}
+
+/** Filas iniciales de una tarjeta nueva. Las que queden vacías se descartan al guardar. */
+export const STARTER_ACTION_TYPES: ActionType[] = ["whatsapp", "instagram", "facebook", "maps", "booking"];
 
 export function emptyCardInput(id: string): CardInput {
   return {
     id,
     slug: "",
     businessName: "",
+    customerName: "",
     description: "",
     category: "",
     address: "",
     schedule: "",
     extraInfo: "",
+    hours: null,
     logoUrl: "",
+    logoRatio: 1,
     coverImageUrl: "",
     backgroundImageUrl: "",
-    phone: "",
-    whatsapp: "",
-    whatsappMessage: "",
-    instagramUrl: "",
-    facebookUrl: "",
-    googleMapsUrl: "",
-    websiteUrl: "",
-    bookingUrl: "",
     primaryColor: "#1e293b",
     secondaryColor: "#f1f5f9",
     backgroundColor: "#ffffff",
@@ -39,8 +42,9 @@ export function emptyCardInput(id: string): CardInput {
     backgroundMode: "color",
     backgroundOverlay: 40,
     showQr: true,
-    isActive: true,
-    isPaid: false,
-    buttons: [],
+    publicationStatus: "active",
+    paymentStatus: "pending",
+    actions: STARTER_ACTION_TYPES.map(emptyAction),
+    branches: [],
   };
 }

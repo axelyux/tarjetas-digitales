@@ -1,174 +1,189 @@
-import type { ButtonIcon } from "./constants";
-import type { CardInput } from "./schema";
+import { resolveActionHref } from "./action-types";
 import {
-  isHttpUrl, normalizeFacebook, normalizeInstagram, normalizeWhatsapp, onlyDigits,
-} from "./links";
-import type { AdminCard, CardButton, DigitalCardData } from "./types";
+  ACTION_TYPES, ACTIONS_LAYOUTS, BACKGROUND_MODES, BORDER_RADII, BUTTON_ICONS, BUTTON_STYLES, CARD_STYLES,
+  FONTS, LAYOUT_VARIANTS, LOGO_SHAPES, LOGO_SIZES, PAYMENT_STATUSES, PUBLICATION_STATUSES, SHADOW_STYLES, TEMPLATES,
+} from "./constants";
+import { sanitizeHours } from "./hours";
+import { isHttpUrl, normalizeWhatsapp } from "./links";
+import type { CardInput } from "./schema";
+import type { AdminCard, AdminListItem, CardAction, CardBranch, DigitalCardData } from "./types";
 
-/** Columnas publicas (anon no puede leer is_paid ni otras administrativas). */
+/** Columnas publicas: anon no puede leer is_paid, estados de pago, tokens ni campos legacy. */
 export const PUBLIC_COLUMNS = [
   "id", "slug", "business_name", "description", "category", "address", "schedule", "extra_info",
-  "logo_url", "cover_image_url", "phone", "whatsapp", "whatsapp_message", "instagram_url",
-  "facebook_url", "google_maps_url", "website_url", "booking_url",
+  "logo_url", "cover_image_url", "logo_ratio", "hours",
   "primary_color", "secondary_color", "background_color", "text_color", "accent_color",
   "template", "layout_variant", "actions_layout", "border_radius", "button_style", "card_style",
   "shadow_style", "logo_size", "logo_shape", "font", "background_mode", "background_image_url",
-  "background_overlay", "show_qr", "is_active", "published_at", "updated_at",
+  "background_overlay", "show_qr", "published_at", "updated_at",
 ].join(",");
+export const PUBLIC_ACTION_COLUMNS = "id,card_id,type,label,value,icon,metadata,sort_order,enabled";
+export const PUBLIC_BRANCH_COLUMNS = "id,card_id,name,address,maps_url,phone,whatsapp,hours,enabled,sort_order";
+export const PUBLIC_SELECT = `${PUBLIC_COLUMNS},card_actions(${PUBLIC_ACTION_COLUMNS}),card_branches(${PUBLIC_BRANCH_COLUMNS})`;
 
-export const PUBLIC_BUTTON_COLUMNS = "id,card_id,label,url,icon,position,is_active";
+type Nullable<T> = T | null | undefined;
 
-type Nullable<T> = T | null;
-
-export type CardRow = {
-  id: string;
-  slug: string;
-  business_name: string;
-  description: Nullable<string>;
-  category: Nullable<string>;
-  address: Nullable<string>;
-  schedule: Nullable<string>;
-  extra_info: Nullable<string>;
-  logo_url: Nullable<string>;
-  cover_image_url: Nullable<string>;
-  phone: Nullable<string>;
-  whatsapp: Nullable<string>;
-  whatsapp_message: Nullable<string>;
-  instagram_url: Nullable<string>;
-  facebook_url: Nullable<string>;
-  google_maps_url: Nullable<string>;
-  website_url: Nullable<string>;
-  booking_url: Nullable<string>;
-  primary_color: string;
-  secondary_color: string;
-  background_color: string;
-  text_color: string;
-  accent_color: string;
-  template: DigitalCardData["template"];
-  layout_variant: DigitalCardData["layoutVariant"];
-  actions_layout: DigitalCardData["actionsLayout"];
-  border_radius: DigitalCardData["borderRadius"];
-  button_style: DigitalCardData["buttonStyle"];
-  card_style: DigitalCardData["cardStyle"];
-  shadow_style: DigitalCardData["shadowStyle"];
-  logo_size: DigitalCardData["logoSize"];
-  logo_shape: DigitalCardData["logoShape"];
-  font: DigitalCardData["font"];
-  background_mode: DigitalCardData["backgroundMode"];
-  background_image_url: Nullable<string>;
-  background_overlay: number;
-  show_qr: boolean;
-  is_active: boolean;
-  is_paid?: boolean;
-  published_at: Nullable<string>;
-  created_at?: string;
-  updated_at: string;
-  card_buttons?: ButtonRow[] | null;
+/** Fila tal como llega de PostgREST / get_card_preview. Todo es "no confiable": se sanea al mapear. */
+export type CardRow = Record<string, unknown> & {
+  id?: string;
+  card_actions?: Record<string, unknown>[] | null;
+  card_branches?: Record<string, unknown>[] | null;
 };
 
-export type ButtonRow = {
-  id: string;
-  label: string;
-  url: string;
-  icon: string;
-  position: number;
-  is_active: boolean;
+// ───────── Saneamiento tolerante (datos corruptos nunca deben romper el render) ─────────
+const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() !== "" ? v : undefined);
+const bool = (v: unknown, fallback: boolean): boolean => (typeof v === "boolean" ? v : fallback);
+const pick = <T extends string>(list: readonly T[], v: unknown, fallback: T): T =>
+  typeof v === "string" && (list as readonly string[]).includes(v) ? (v as T) : fallback;
+const color = (v: unknown, fallback: string): string =>
+  typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
+const num = (v: unknown, fallback: number, min: number, max: number): number => {
+  const n = typeof v === "string" ? Number(v) : v;
+  return typeof n === "number" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
+const safeAsset = (v: unknown): string | undefined => {
+  const s = str(v);
+  return s && isHttpUrl(s) ? s : undefined;
 };
 
-const opt = (v: Nullable<string> | undefined): string | undefined => (v ? v : undefined);
+/** Orden estable aunque sort_order este duplicado, nulo o corrupto. */
+function stableSort<T extends { sortOrder: number }>(items: T[]): T[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => a.item.sortOrder - b.item.sortOrder || a.index - b.index)
+    .map((x) => x.item);
+}
 
-function mapButton(row: ButtonRow): CardButton {
+function mapAction(row: Record<string, unknown>, index: number): CardAction | null {
+  const type = pick(ACTION_TYPES, row.type, "custom_url");
+  const value = str(row.value);
+  if (!value) return null;
+  const metadata = typeof row.metadata === "object" && row.metadata !== null ? (row.metadata as Record<string, unknown>) : {};
   return {
-    id: row.id,
-    label: row.label,
-    url: row.url,
-    icon: row.icon as ButtonIcon,
-    position: row.position,
-    isActive: row.is_active,
+    id: str(row.id) ?? `action-${index}`,
+    type,
+    label: typeof row.label === "string" ? row.label.slice(0, 30) : "",
+    value,
+    icon: pick(BUTTON_ICONS, row.icon, "link"),
+    metadata: { message: str(metadata.message) },
+    enabled: bool(row.enabled, true),
+    sortOrder: num(row.sort_order, index, -32768, 32767),
   };
 }
 
+function mapBranch(row: Record<string, unknown>, index: number): CardBranch | null {
+  const name = str(row.name);
+  if (!name) return null;
+  return {
+    id: str(row.id) ?? `branch-${index}`,
+    name,
+    address: str(row.address),
+    mapsUrl: str(row.maps_url),
+    phone: str(row.phone),
+    whatsapp: str(row.whatsapp),
+    hours: sanitizeHours(row.hours),
+    enabled: bool(row.enabled, true),
+    sortOrder: num(row.sort_order, index, -32768, 32767),
+  };
+}
+
+function mapActions(rows: Nullable<Record<string, unknown>[]>): CardAction[] {
+  return stableSort((rows ?? []).map(mapAction).filter((a): a is CardAction => a !== null));
+}
+function mapBranches(rows: Nullable<Record<string, unknown>[]>): CardBranch[] {
+  return stableSort((rows ?? []).map(mapBranch).filter((b): b is CardBranch => b !== null));
+}
+
+/** Fila -> datos de tarjeta publica. Solo acciones/sucursales habilitadas. */
 export function rowToCardData(row: CardRow): DigitalCardData {
   return {
-    slug: row.slug,
-    businessName: row.business_name,
-    description: opt(row.description),
-    category: opt(row.category),
-    address: opt(row.address),
-    schedule: opt(row.schedule),
-    extraInfo: opt(row.extra_info),
-    logoUrl: opt(row.logo_url),
-    coverImageUrl: opt(row.cover_image_url),
-    phone: opt(row.phone),
-    whatsapp: opt(row.whatsapp),
-    whatsappMessage: opt(row.whatsapp_message),
-    instagramUrl: opt(row.instagram_url),
-    facebookUrl: opt(row.facebook_url),
-    googleMapsUrl: opt(row.google_maps_url),
-    websiteUrl: opt(row.website_url),
-    bookingUrl: opt(row.booking_url),
-    primaryColor: row.primary_color,
-    secondaryColor: row.secondary_color,
-    backgroundColor: row.background_color,
-    textColor: row.text_color,
-    accentColor: row.accent_color,
-    template: row.template,
-    layoutVariant: row.layout_variant,
-    actionsLayout: row.actions_layout,
-    borderRadius: row.border_radius,
-    buttonStyle: row.button_style,
-    cardStyle: row.card_style,
-    shadowStyle: row.shadow_style,
-    logoSize: row.logo_size,
-    logoShape: row.logo_shape,
-    font: row.font,
-    backgroundMode: row.background_mode,
-    backgroundImageUrl: opt(row.background_image_url),
-    backgroundOverlay: row.background_overlay,
-    showQr: row.show_qr,
-    buttons: (row.card_buttons ?? [])
-      .map(mapButton)
-      .filter((b) => b.isActive)
-      .sort((a, b) => a.position - b.position),
+    slug: str(row.slug) ?? "",
+    businessName: str(row.business_name) ?? "Tarjeta digital",
+    description: str(row.description),
+    category: str(row.category),
+    address: str(row.address),
+    schedule: str(row.schedule),
+    extraInfo: str(row.extra_info),
+    hours: sanitizeHours(row.hours),
+    logoUrl: safeAsset(row.logo_url),
+    logoRatio: num(row.logo_ratio, 1, 0.05, 19.9),
+    coverImageUrl: safeAsset(row.cover_image_url),
+    primaryColor: color(row.primary_color, "#1e293b"),
+    secondaryColor: color(row.secondary_color, "#f1f5f9"),
+    backgroundColor: color(row.background_color, "#ffffff"),
+    textColor: color(row.text_color, "#0f172a"),
+    accentColor: color(row.accent_color, "#2563eb"),
+    template: pick(TEMPLATES, row.template, "modern"),
+    layoutVariant: pick(LAYOUT_VARIANTS, row.layout_variant, "centered"),
+    actionsLayout: pick(ACTIONS_LAYOUTS, row.actions_layout, "stack"),
+    borderRadius: pick(BORDER_RADII, row.border_radius, "md"),
+    buttonStyle: pick(BUTTON_STYLES, row.button_style, "solid"),
+    cardStyle: pick(CARD_STYLES, row.card_style, "flat"),
+    shadowStyle: pick(SHADOW_STYLES, row.shadow_style, "soft"),
+    logoSize: pick(LOGO_SIZES, row.logo_size, "md"),
+    logoShape: pick(LOGO_SHAPES, row.logo_shape, "circle"),
+    font: pick(FONTS, row.font, "inter"),
+    backgroundMode: pick(BACKGROUND_MODES, row.background_mode, "color"),
+    backgroundImageUrl: safeAsset(row.background_image_url),
+    backgroundOverlay: Math.round(num(row.background_overlay, 40, 0, 90)),
+    showQr: bool(row.show_qr, true),
+    actions: mapActions(row.card_actions).filter((a) => a.enabled),
+    branches: mapBranches(row.card_branches).filter((b) => b.enabled),
   };
 }
 
+/** Fila completa del panel (incluye acciones/sucursales deshabilitadas). */
 export function rowToAdminCard(row: CardRow): AdminCard {
   const data = rowToCardData(row);
+  const updatedAt = str(row.updated_at) ?? "";
   return {
     ...data,
-    buttons: (row.card_buttons ?? []).map(mapButton).sort((a, b) => a.position - b.position),
-    id: row.id,
-    isActive: row.is_active,
-    isPaid: row.is_paid ?? false,
-    createdAt: row.created_at ?? row.updated_at,
-    updatedAt: row.updated_at,
-    publishedAt: opt(row.published_at),
+    actions: mapActions(row.card_actions),
+    branches: mapBranches(row.card_branches),
+    id: str(row.id) ?? "",
+    customerName: str(row.customer_name),
+    publicationStatus: pick(PUBLICATION_STATUSES, row.publication_status, "draft"),
+    paymentStatus: pick(PAYMENT_STATUSES, row.payment_status, "pending"),
+    previewToken: str(row.preview_token) ?? "",
+    createdAt: str(row.created_at) ?? updatedAt,
+    updatedAt,
+    publishedAt: str(row.published_at),
   };
 }
 
-/** AdminCard -> valores del formulario (strings vacios en lugar de undefined). */
+export const LIST_COLUMNS = "id,slug,business_name,category,customer_name,template,publication_status,payment_status,created_at";
+
+export function rowToListItem(row: CardRow): AdminListItem {
+  return {
+    id: str(row.id) ?? "",
+    slug: str(row.slug) ?? "",
+    businessName: str(row.business_name) ?? "",
+    category: str(row.category),
+    customerName: str(row.customer_name),
+    template: pick(TEMPLATES, row.template, "modern"),
+    publicationStatus: pick(PUBLICATION_STATUSES, row.publication_status, "draft"),
+    paymentStatus: pick(PAYMENT_STATUSES, row.payment_status, "pending"),
+    createdAt: str(row.created_at) ?? "",
+  };
+}
+
+// ───────── AdminCard <-> formulario <-> BD ─────────
 export function adminCardToInput(card: AdminCard): CardInput {
   return {
     id: card.id,
     slug: card.slug,
     businessName: card.businessName,
+    customerName: card.customerName ?? "",
     description: card.description ?? "",
     category: card.category ?? "",
     address: card.address ?? "",
     schedule: card.schedule ?? "",
     extraInfo: card.extraInfo ?? "",
+    hours: card.hours,
     logoUrl: card.logoUrl ?? "",
+    logoRatio: card.logoRatio,
     coverImageUrl: card.coverImageUrl ?? "",
     backgroundImageUrl: card.backgroundImageUrl ?? "",
-    phone: card.phone ?? "",
-    whatsapp: card.whatsapp ?? "",
-    whatsappMessage: card.whatsappMessage ?? "",
-    instagramUrl: card.instagramUrl ?? "",
-    facebookUrl: card.facebookUrl ?? "",
-    googleMapsUrl: card.googleMapsUrl ?? "",
-    websiteUrl: card.websiteUrl ?? "",
-    bookingUrl: card.bookingUrl ?? "",
     primaryColor: card.primaryColor,
     secondaryColor: card.secondaryColor,
     backgroundColor: card.backgroundColor,
@@ -187,38 +202,38 @@ export function adminCardToInput(card: AdminCard): CardInput {
     backgroundMode: card.backgroundMode,
     backgroundOverlay: card.backgroundOverlay,
     showQr: card.showQr,
-    isActive: card.isActive,
-    isPaid: card.isPaid,
-    buttons: card.buttons.map((b) => ({ label: b.label, url: b.url, icon: b.icon, isActive: b.isActive })),
+    publicationStatus: card.publicationStatus,
+    paymentStatus: card.paymentStatus,
+    actions: card.actions.map((a) => ({
+      type: a.type, label: a.label, value: a.value, icon: a.icon, message: a.metadata.message ?? "", enabled: a.enabled,
+    })),
+    branches: card.branches.map((b) => ({
+      name: b.name, address: b.address ?? "", mapsUrl: b.mapsUrl ?? "", phone: b.phone ?? "",
+      whatsapp: b.whatsapp ?? "", hours: b.hours, enabled: b.enabled,
+    })),
   };
 }
 
-/** Valores del formulario (ya validados) -> DigitalCardData para el preview en vivo. */
+/** Valores del formulario -> DigitalCardData para el preview en vivo (tolerante a entradas a medias). */
 export function inputToCardData(input: CardInput): DigitalCardData {
-  const safeUrl = (v: string) => (v && isHttpUrl(v) ? v : undefined);
+  const opt = (v: string) => (v.trim() ? v : undefined);
   return {
     slug: input.slug,
-    businessName: input.businessName,
+    businessName: input.businessName || "Nombre del negocio",
     description: opt(input.description),
     category: opt(input.category),
     address: opt(input.address),
     schedule: opt(input.schedule),
     extraInfo: opt(input.extraInfo),
-    logoUrl: safeUrl(input.logoUrl),
-    coverImageUrl: safeUrl(input.coverImageUrl),
-    phone: opt(input.phone),
-    whatsapp: input.whatsapp && onlyDigits(input.whatsapp).length >= 8 ? input.whatsapp : undefined,
-    whatsappMessage: opt(input.whatsappMessage),
-    instagramUrl: opt(input.instagramUrl),
-    facebookUrl: opt(input.facebookUrl),
-    googleMapsUrl: safeUrl(input.googleMapsUrl),
-    websiteUrl: safeUrl(input.websiteUrl),
-    bookingUrl: safeUrl(input.bookingUrl),
-    primaryColor: input.primaryColor,
-    secondaryColor: input.secondaryColor,
-    backgroundColor: input.backgroundColor,
-    textColor: input.textColor,
-    accentColor: input.accentColor,
+    hours: input.hours,
+    logoUrl: safeAsset(input.logoUrl),
+    logoRatio: input.logoRatio || 1,
+    coverImageUrl: safeAsset(input.coverImageUrl),
+    primaryColor: color(input.primaryColor, "#1e293b"),
+    secondaryColor: color(input.secondaryColor, "#f1f5f9"),
+    backgroundColor: color(input.backgroundColor, "#ffffff"),
+    textColor: color(input.textColor, "#0f172a"),
+    accentColor: color(input.accentColor, "#2563eb"),
     template: input.template,
     layoutVariant: input.layoutVariant,
     actionsLayout: input.actionsLayout,
@@ -230,39 +245,40 @@ export function inputToCardData(input: CardInput): DigitalCardData {
     logoShape: input.logoShape,
     font: input.font,
     backgroundMode: input.backgroundMode,
-    backgroundImageUrl: safeUrl(input.backgroundImageUrl),
+    backgroundImageUrl: safeAsset(input.backgroundImageUrl),
     backgroundOverlay: input.backgroundOverlay,
     showQr: input.showQr,
-    buttons: input.buttons
-      .filter((b) => b.isActive && b.label && isHttpUrl(b.url))
-      .map((b, i) => ({ id: `preview-${i}`, label: b.label, url: b.url, icon: b.icon, position: i, isActive: true })),
+    actions: input.actions
+      .map((a, i): CardAction => ({
+        id: `preview-${i}`, type: a.type, label: a.label, value: a.value, icon: a.icon,
+        metadata: { message: opt(a.message) }, enabled: a.enabled, sortOrder: i,
+      })),
+    branches: input.branches.map((b, i): CardBranch => ({
+      id: `preview-b-${i}`, name: b.name || "Sucursal", address: opt(b.address), mapsUrl: opt(b.mapsUrl),
+      phone: opt(b.phone), whatsapp: opt(b.whatsapp), hours: b.hours, enabled: b.enabled, sortOrder: i,
+    })).filter((b) => b.enabled),
   };
 }
 
 const nullIfEmpty = (v: string): string | null => (v.trim() === "" ? null : v.trim());
 
-/** CardInput validado -> fila de la tabla cards (normaliza redes y telefonos). */
-export function inputToRow(input: CardInput) {
+/** CardInput validado -> JSON de la tarjeta para save_card (solo columnas gestionadas). */
+export function inputToCardRow(input: CardInput) {
   return {
     id: input.id,
     slug: input.slug,
     business_name: input.businessName,
+    customer_name: nullIfEmpty(input.customerName),
     description: nullIfEmpty(input.description),
     category: nullIfEmpty(input.category),
     address: nullIfEmpty(input.address),
     schedule: nullIfEmpty(input.schedule),
     extra_info: nullIfEmpty(input.extraInfo),
+    hours: input.hours,
     logo_url: nullIfEmpty(input.logoUrl),
+    logo_ratio: input.logoUrl ? input.logoRatio : 1,
     cover_image_url: nullIfEmpty(input.coverImageUrl),
     background_image_url: nullIfEmpty(input.backgroundImageUrl),
-    phone: nullIfEmpty(input.phone),
-    whatsapp: input.whatsapp.trim() ? normalizeWhatsapp(input.whatsapp) : null,
-    whatsapp_message: nullIfEmpty(input.whatsappMessage),
-    instagram_url: input.instagramUrl.trim() ? normalizeInstagram(input.instagramUrl) : null,
-    facebook_url: input.facebookUrl.trim() ? normalizeFacebook(input.facebookUrl) : null,
-    google_maps_url: nullIfEmpty(input.googleMapsUrl),
-    website_url: nullIfEmpty(input.websiteUrl),
-    booking_url: nullIfEmpty(input.bookingUrl),
     primary_color: input.primaryColor,
     secondary_color: input.secondaryColor,
     background_color: input.backgroundColor,
@@ -281,18 +297,37 @@ export function inputToRow(input: CardInput) {
     background_mode: input.backgroundMode,
     background_overlay: input.backgroundOverlay,
     show_qr: input.showQr,
-    is_active: input.isActive,
-    is_paid: input.isPaid,
+    publication_status: input.publicationStatus,
+    payment_status: input.paymentStatus,
   };
 }
 
-export function inputButtonsToRows(cardId: string, buttons: CardInput["buttons"]) {
-  return buttons.map((b, position) => ({
-    card_id: cardId,
-    label: b.label,
-    url: b.url,
-    icon: b.icon,
-    position,
-    is_active: b.isActive,
+/** Normaliza el valor que se guarda (la tarjeta lo vuelve a resolver al renderizar). */
+function storedValue(a: CardInput["actions"][number]): string {
+  if (a.type === "whatsapp" && !/^https?:\/\//i.test(a.value)) return normalizeWhatsapp(a.value);
+  if (a.type === "maps" || a.type === "phone" || a.type === "email") return a.value.trim();
+  return resolveActionHref(a.type, a.value, { message: a.message }) ?? a.value.trim();
+}
+
+export function inputToActionRows(actions: CardInput["actions"]) {
+  return actions.map((a) => ({
+    type: a.type,
+    label: a.label.trim(),
+    value: storedValue(a),
+    icon: a.icon,
+    metadata: a.message.trim() ? { message: a.message.trim() } : {},
+    enabled: a.enabled,
+  }));
+}
+
+export function inputToBranchRows(branches: CardInput["branches"]) {
+  return branches.map((b) => ({
+    name: b.name,
+    address: nullIfEmpty(b.address),
+    maps_url: nullIfEmpty(b.mapsUrl),
+    phone: nullIfEmpty(b.phone),
+    whatsapp: nullIfEmpty(b.whatsapp),
+    hours: b.hours,
+    enabled: b.enabled,
   }));
 }

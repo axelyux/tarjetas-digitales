@@ -14,7 +14,13 @@ export function CardPreview({ values }: { values: CardInput }) {
   return (
     <div className="mx-auto w-full max-w-[340px]">
       <div className="rounded-[2.2rem] border border-line bg-ink p-2.5 shadow-lg">
-        <div className="h-[640px] overflow-y-auto overflow-x-hidden rounded-[1.7rem] bg-white [container-type:inline-size]">
+        <div
+          className="h-[640px] overflow-y-auto overflow-x-hidden rounded-[1.7rem] bg-white [container-type:inline-size]"
+          onClickCapture={(e) => {
+            // Los enlaces del preview no deben sacar al administrador del editor.
+            if ((e.target as HTMLElement).closest("a")) e.preventDefault();
+          }}
+        >
           <DigitalCard data={data} qrSrc={qrSrc} embedded />
         </div>
       </div>
