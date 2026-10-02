@@ -1,6 +1,6 @@
 -- Datos demo. Ejecutar despues de las migraciones (SQL Editor, rol postgres). Es re-ejecutable.
 -- 1) Reemplaza TU_EMAIL por el correo del administrador creado en Authentication > Users.
-insert into public.admins (email) values (lower('TU_EMAIL@ejemplo.com')) on conflict do nothing;
+insert into public.admins (email) values (lower('axelyahelfigueroa55@gmail.com')) on conflict do nothing;
 
 -- 2) Tarjetas de ejemplo que cubren los casos reales:
 --    completa, sin Instagram, sin logo, varias acciones/WhatsApp, URL personalizada, PDF, sucursales,

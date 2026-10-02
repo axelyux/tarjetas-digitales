@@ -2,6 +2,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
+import { PUBLIC_ACTION_COLUMNS, PUBLIC_BRANCH_COLUMNS, PUBLIC_COLUMNS } from "@/lib/cards/mapper";
 
 const read = (path: string) => readFileSync(new URL(`../supabase/${path}`, import.meta.url), "utf8");
 
@@ -61,6 +62,23 @@ describe("seed.sql", () => {
     try {
       const r = await db.query<{ slug: string }>("select slug from public.cards order by slug");
       expect(r.rows.map((x) => x.slug)).toEqual(["barberia-carlos", "cafe-central", "salon-maria", "taller-juan"]);
+    } finally {
+      await db.exec("reset role");
+    }
+  });
+
+  it("las consultas EXACTAS de la página pública funcionan con el rol anon (columnas concedidas)", async () => {
+    await db.exec("set role anon");
+    try {
+      const card = await db.query<{ slug: string }>(`select ${PUBLIC_COLUMNS} from public.cards where slug = 'barberia-carlos'`);
+      expect(card.rows).toHaveLength(1);
+      const acts = await db.query(`select ${PUBLIC_ACTION_COLUMNS} from public.card_actions where card_id = $1`, [(card.rows[0] as unknown as { id: string }).id]);
+      expect(acts.rows.length).toBeGreaterThan(3);
+      await db.query(`select ${PUBLIC_BRANCH_COLUMNS} from public.card_branches`);
+      const status = await db.query("select public.resolve_card_slug('dental-sonrisa') r");
+      expect((status.rows[0] as { r: string }).r).toBe("unavailable");
+      // anon NO puede filtrar por columnas privadas
+      await expect(db.query("select slug from public.cards where publication_status = 'active'")).rejects.toThrow(/permission denied/);
     } finally {
       await db.exec("reset role");
     }

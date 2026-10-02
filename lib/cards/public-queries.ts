@@ -21,8 +21,7 @@ export const getPublicCard = cache(async (slug: string): Promise<PublicCardResul
     const { data, error } = await supabase
       .from("cards")
       .select(PUBLIC_SELECT)
-      .eq("slug", slug)
-      .eq("publication_status", "active")
+      .eq("slug", slug) // RLS ya limita al rol anon a tarjetas activas (anon no puede filtrar por publication_status)
       .maybeSingle();
 
     if (error) return { status: "error" };
@@ -62,7 +61,6 @@ export async function listActiveSlugs(): Promise<{ slug: string; updatedAt: stri
     const { data } = await createPublicClient()
       .from("cards")
       .select("slug,updated_at")
-      .eq("publication_status", "active")
       .order("created_at", { ascending: false })
       .limit(5000);
     return (data ?? []).map((r) => ({ slug: r.slug as string, updatedAt: r.updated_at as string }));
