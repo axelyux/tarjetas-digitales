@@ -32,8 +32,6 @@ export function buildDemoCard(template: Template, layoutVariant: LayoutVariant =
     extraInfo: "Estacionamiento gratuito para clientes.",
     hours,
     logoRatio: 1,
-    coverMode: "gradient",
-    coverFade: true,
     ...preset,
     template,
     layoutVariant,

@@ -32,9 +32,9 @@ export const ACTION_CONFIG: Record<ActionType, ActionConfig> = {
   custom_url: { label: "Enlace personalizado", icon: "link", placeholder: "https://...", hint: "Menú, tienda, Mercado Libre, formulario... cualquier enlace.", social: false, labelRequired: true, customIcon: true, invalidMessage: "Ingresa una URL válida." },
   pdf: { label: "Descargar PDF", icon: "file-text", placeholder: "https://... o sube un PDF", social: false, labelRequired: false, customIcon: false, invalidMessage: "Ingresa una URL válida o sube un PDF." },
   catalog: { label: "Ver catálogo", icon: "book-open", placeholder: "https://...", social: false, labelRequired: false, customIcon: true, invalidMessage: "Ingresa una URL válida." },
-  youtube: { label: "YouTube", icon: "video", placeholder: "https://youtube.com/@canal", social: true, labelRequired: false, customIcon: false, invalidMessage: "Ingresa una URL válida." },
-  tiktok: { label: "TikTok", icon: "video", placeholder: "@usuario o tiktok.com/@usuario", social: true, labelRequired: false, customIcon: false, invalidMessage: "Usa @usuario o una URL válida." },
-  linkedin: { label: "LinkedIn", icon: "globe", placeholder: "https://linkedin.com/in/...", social: true, labelRequired: false, customIcon: false, invalidMessage: "Ingresa una URL válida." },
+  youtube: { label: "YouTube", icon: "youtube", placeholder: "https://youtube.com/@canal", social: true, labelRequired: false, customIcon: false, invalidMessage: "Ingresa una URL válida." },
+  tiktok: { label: "TikTok", icon: "tiktok", placeholder: "@usuario o tiktok.com/@usuario", social: true, labelRequired: false, customIcon: false, invalidMessage: "Usa @usuario o una URL válida." },
+  linkedin: { label: "LinkedIn", icon: "linkedin", placeholder: "https://linkedin.com/in/...", social: true, labelRequired: false, customIcon: false, invalidMessage: "Ingresa una URL válida." },
 };
 
 type Metadata = { message?: string } | null | undefined;

@@ -31,42 +31,50 @@ beforeAll(async () => {
 }, 60000);
 
 describe("seed.sql", () => {
-  it("crea las tarjetas demo una sola vez", async () => {
+  it("crea las 3 tarjetas demo una sola vez (re-ejecutable)", async () => {
     const r = await db.query<{ n: string }>("select count(*) n from public.cards");
-    expect(Number(r.rows[0]?.n)).toBe(6);
+    expect(Number(r.rows[0]?.n)).toBe(3);
     const a = await db.query<{ n: string }>("select count(*) n from public.card_actions");
-    expect(Number(a.rows[0]?.n)).toBe(23);
+    expect(Number(a.rows[0]?.n)).toBe(24);
     const b = await db.query<{ n: string }>("select count(*) n from public.card_branches");
-    expect(Number(b.rows[0]?.n)).toBe(2);
+    expect(Number(b.rows[0]?.n)).toBe(4);
   });
 
-  it("cubre estados: activas, inactiva pagada y preview pendiente", async () => {
-    const r = await db.query<{ slug: string; publication_status: string; payment_status: string }>(
-      "select slug, publication_status, payment_status from public.cards order by slug");
-    const by = Object.fromEntries(r.rows.map((x) => [x.slug, `${x.publication_status}+${x.payment_status}`]));
-    expect(by["dental-sonrisa"]).toBe("inactive+paid");
-    expect(by["estudio-luz"]).toBe("preview+pending");
-    expect(by["salon-maria"]).toBe("active+pending");
+  it("cada negocio tiene logo, banner con imagen real y estados distintos", async () => {
+    const r = await db.query<{ slug: string; logo_url: string; cover_image_url: string; cover_mode: string; payment_status: string }>(
+      "select slug, logo_url, cover_image_url, cover_mode, payment_status from public.cards order by slug");
+    expect(r.rows.map((x) => x.slug)).toEqual(["barberia-don-ramiro", "cafe-tostado", "iron-forge-gym"]);
+    for (const row of r.rows) {
+      expect(row.logo_url).toMatch(/^\/demo\/.+-logo\.svg$/);
+      expect(row.cover_image_url).toMatch(/^\/demo\/.+-cover\.jpg$/);
+      expect(row.cover_mode).toBe("image");
+    }
+    expect(r.rows.find((x) => x.slug === "iron-forge-gym")?.payment_status).toBe("pending");
   });
 
-  it("incluye caso sin Instagram, sin logo y con varias acciones", async () => {
-    const noIg = await db.query("select 1 from public.card_actions a join public.cards c on c.id = a.card_id where c.slug = 'taller-juan' and a.type = 'instagram'");
-    expect(noIg.rows).toHaveLength(0);
-    const noLogo = await db.query("select 1 from public.cards where logo_url is null");
-    expect(noLogo.rows.length).toBeGreaterThanOrEqual(2); // dental y estudio sin logo
-    const withLogo = await db.query("select cover_mode from public.cards where logo_url is not null order by slug");
-    expect(withLogo.rows).toHaveLength(4);
-    const gradient = await db.query("select 1 from public.cards where slug = 'salon-maria' and cover_mode = 'gradient' and cover_fade");
-    expect(gradient.rows).toHaveLength(1);
-    const wa = await db.query("select 1 from public.card_actions a join public.cards c on c.id = a.card_id where c.slug = 'barberia-carlos' and a.type = 'whatsapp'");
-    expect(wa.rows).toHaveLength(2);
+  it("los archivos de imagen referenciados existen en /public/demo", async () => {
+    const { existsSync } = await import("node:fs");
+    const r = await db.query<{ logo_url: string; cover_image_url: string }>("select logo_url, cover_image_url from public.cards");
+    for (const row of r.rows) {
+      for (const url of [row.logo_url, row.cover_image_url]) {
+        expect(existsSync(new URL(`../public${url}`, import.meta.url)), url).toBe(true);
+      }
+    }
   });
 
-  it("el público solo ve las tarjetas activas", async () => {
+  it("incluye varias acciones del mismo tipo, PDF, enlace personalizado y sucursales", async () => {
+    const types = await db.query<{ type: string }>("select distinct type from public.card_actions order by type");
+    expect(types.rows.map((t) => t.type)).toEqual(
+      expect.arrayContaining(["whatsapp", "phone", "booking", "maps", "pdf", "custom_url", "email", "instagram", "facebook", "tiktok", "youtube"]));
+    const br = await db.query("select 1 from public.card_branches b join public.cards c on c.id = b.card_id where c.slug = 'cafe-tostado'");
+    expect(br.rows).toHaveLength(2);
+  });
+
+  it("el público ve las 3 tarjetas activas", async () => {
     await db.exec("set role anon");
     try {
       const r = await db.query<{ slug: string }>("select slug from public.cards order by slug");
-      expect(r.rows.map((x) => x.slug)).toEqual(["barberia-carlos", "cafe-central", "salon-maria", "taller-juan"]);
+      expect(r.rows).toHaveLength(3);
     } finally {
       await db.exec("reset role");
     }
@@ -75,17 +83,14 @@ describe("seed.sql", () => {
   it("las consultas EXACTAS de la página pública funcionan con el rol anon (columnas concedidas)", async () => {
     await db.exec("set role anon");
     try {
-      const card = await db.query<{ slug: string }>(`select ${PUBLIC_COLUMNS} from public.cards where slug = 'barberia-carlos'`);
+      const card = await db.query<{ id: string }>(`select ${PUBLIC_COLUMNS} from public.cards where slug = 'iron-forge-gym'`);
       expect(card.rows).toHaveLength(1);
-      const acts = await db.query(`select ${PUBLIC_ACTION_COLUMNS} from public.card_actions where card_id = $1`, [(card.rows[0] as unknown as { id: string }).id]);
-      expect(acts.rows.length).toBeGreaterThan(3);
-      await db.query(`select ${PUBLIC_BRANCH_COLUMNS} from public.card_branches`);
-      // consulta del sitemap
+      const acts = await db.query(`select ${PUBLIC_ACTION_COLUMNS} from public.card_actions where card_id = $1`, [card.rows[0]!.id]);
+      expect(acts.rows).toHaveLength(8);
+      const branches = await db.query(`select ${PUBLIC_BRANCH_COLUMNS} from public.card_branches`);
+      expect(branches.rows).toHaveLength(4);
       const sm = await db.query("select slug,updated_at from public.cards order by updated_at desc limit 5000");
-      expect(sm.rows.length).toBe(4);
-      const status = await db.query("select public.resolve_card_slug('dental-sonrisa') r");
-      expect((status.rows[0] as { r: string }).r).toBe("unavailable");
-      // anon NO puede filtrar por columnas privadas
+      expect(sm.rows).toHaveLength(3);
       await expect(db.query("select slug from public.cards where publication_status = 'active'")).rejects.toThrow(/permission denied/);
     } finally {
       await db.exec("reset role");

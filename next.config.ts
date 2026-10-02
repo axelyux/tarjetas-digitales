@@ -7,7 +7,7 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   experimental: {
-    optimizePackageImports: ["lucide-react", "react-icons/si"],
+    optimizePackageImports: ["lucide-react", "react-icons/si", "react-icons/fa6"],
     serverActions: { bodySizeLimit: "6mb" },
   },
   images: {
