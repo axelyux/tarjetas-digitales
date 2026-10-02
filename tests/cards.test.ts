@@ -321,3 +321,28 @@ describe("color", () => {
     expect(contrastRatio("#ffff00", "#ffffff")).toBeLessThan(2); // amarillo sobre blanco
   });
 });
+
+describe("banner (portada)", () => {
+  const html = (over: object) =>
+    renderToStaticMarkup(createElement(DigitalCard, { data: { ...buildDemoCard("modern", "hero"), ...over } }));
+  it("color sólido, degradado entre dos colores o imagen, con borde difuminado opcional", () => {
+    expect(html({ coverMode: "color", coverFade: false })).not.toContain("linear-gradient(135deg");
+    expect(html({ coverMode: "gradient", coverFade: false })).toContain("linear-gradient(135deg, var(--card-primary), var(--card-cover-2))");
+    const img = html({ coverMode: "image", coverImageUrl: "/demo/barberia-cover.svg", coverFade: false });
+    expect(img).toContain('src="/demo/barberia-cover.svg"');
+    expect(html({ coverMode: "color", coverFade: true })).toContain("to bottom, transparent, var(--card-background)");
+  });
+  it("modo imagen sin imagen no rompe; filas antiguas sin cover_mode usan color", () => {
+    expect(html({ coverMode: "image", coverImageUrl: undefined })).toContain("<h1");
+    const data = rowToCardData({ slug: "x", business_name: "X" });
+    expect(data.coverMode).toBe("color");
+    expect(data.coverFade).toBe(false);
+  });
+  it("solo acepta imágenes http(s) o los assets propios /demo", () => {
+    const base = valid();
+    expect(cardInputSchema.safeParse({ ...base, coverImageUrl: "/demo/cafe-cover.svg" }).success).toBe(true);
+    expect(cardInputSchema.safeParse({ ...base, coverImageUrl: "/etc/passwd" }).success).toBe(false);
+    expect(cardInputSchema.safeParse({ ...base, coverImageUrl: "javascript:alert(1)" }).success).toBe(false);
+    expect(rowToCardData({ cover_image_url: "javascript:alert(1)" }).coverImageUrl).toBeUndefined();
+  });
+});

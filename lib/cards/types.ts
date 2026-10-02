@@ -1,6 +1,6 @@
 import type {
   ActionType, ActionsLayout, BackgroundMode, BorderRadius, ButtonIcon, ButtonStyle, CardStyle, FontKey,
-  LayoutVariant, LogoShape, LogoSize, PaymentStatus, PublicationStatus, ShadowStyle, Template,
+  CoverMode, LayoutVariant, LogoShape, LogoSize, PaymentStatus, PublicationStatus, ShadowStyle, Template,
 } from "./constants";
 import type { Hours } from "./hours";
 
@@ -44,6 +44,9 @@ export type DigitalCardData = {
   logoUrl?: string;
   logoRatio: number;
   coverImageUrl?: string;
+  coverMode: CoverMode;
+  coverColor2: string;
+  coverFade: boolean;
 
   primaryColor: string;
   secondaryColor: string;

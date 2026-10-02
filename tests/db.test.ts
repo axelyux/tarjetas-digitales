@@ -36,7 +36,7 @@ const ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")
 
 const cardJson = (n: number, over: Record<string, unknown> = {}) => ({
   id: ID(n), slug: `card-${n}`, business_name: `Card ${n}`, description: null, category: null, address: null,
-  schedule: null, extra_info: null, customer_name: null, logo_url: null, cover_image_url: null, logo_ratio: 1,
+  schedule: null, extra_info: null, customer_name: null, logo_url: null, cover_image_url: null, cover_mode: "color", cover_color2: "#64748b", cover_fade: false, logo_ratio: 1,
   hours: null, primary_color: "#111111", secondary_color: "#eeeeee", background_color: "#ffffff",
   text_color: "#111111", accent_color: "#0d9488", template: "modern", layout_variant: "centered",
   actions_layout: "stack", border_radius: "md", button_style: "solid", card_style: "flat", shadow_style: "soft",
@@ -64,6 +64,7 @@ beforeAll(async () => {
     insert into public.card_buttons (card_id, label, url, icon, position) values ('${ID(900)}', 'Menú', 'https://ex.com/menu', 'menu', 0);
   `);
   await db.exec(sql("0002_robustness.sql"));
+  await db.exec(sql("0003_cover_style.sql"));
 }, 60000);
 
 describe("migración 0002 sobre datos existentes", () => {

@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { ACTION_CONFIG, resolveActionHref } from "./action-types";
 import {
-  ACTION_TYPES, ACTIONS_LAYOUTS, BACKGROUND_MODES, BORDER_RADII, BUTTON_ICONS, BUTTON_STYLES, CARD_STYLES,
+  ACTION_TYPES, ACTIONS_LAYOUTS, BACKGROUND_MODES, BORDER_RADII, BUTTON_ICONS, BUTTON_STYLES, CARD_STYLES, COVER_MODES,
   FONTS, LAYOUT_VARIANTS, LOGO_SHAPES, LOGO_SIZES, MAX_ACTIONS, MAX_BRANCHES, PAYMENT_STATUSES,
   PUBLICATION_STATUSES, SHADOW_STYLES, TEMPLATES,
 } from "./constants";
 import { hoursSchema } from "./hours";
-import { isHttpUrl, isValidPhoneNumber } from "./links";
+import { isHttpUrl, isOwnDemoAsset, isValidPhoneNumber } from "./links";
 import { SLUG_REGEX, isReservedSlug } from "./slug";
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color inválido (#RRGGBB)");
@@ -26,6 +26,7 @@ const assetUrl = z
   .max(500)
   .refine((v) => {
     if (v === "") return true;
+    if (isOwnDemoAsset(v)) return true;
     if (!isHttpUrl(v)) return false;
     const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
     return base ? new URL(v).hostname === new URL(base).hostname : true;
@@ -90,6 +91,9 @@ export const cardInputSchema = z.object({
   logoUrl: assetUrl,
   logoRatio: z.number().min(0.05).max(19.9),
   coverImageUrl: assetUrl,
+  coverMode: z.enum(COVER_MODES),
+  coverColor2: hexColor,
+  coverFade: z.boolean(),
   backgroundImageUrl: assetUrl,
 
   primaryColor: hexColor,

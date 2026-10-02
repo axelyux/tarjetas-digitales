@@ -25,6 +25,7 @@ beforeAll(async () => {
   await db.exec(STUBS);
   await db.exec(read("migrations/0001_init.sql"));
   await db.exec(read("migrations/0002_robustness.sql"));
+  await db.exec(read("migrations/0003_cover_style.sql"));
   await db.exec(read("seed.sql"));
   await db.exec(read("seed.sql")); // re-ejecutable
 }, 60000);
@@ -51,8 +52,12 @@ describe("seed.sql", () => {
   it("incluye caso sin Instagram, sin logo y con varias acciones", async () => {
     const noIg = await db.query("select 1 from public.card_actions a join public.cards c on c.id = a.card_id where c.slug = 'taller-juan' and a.type = 'instagram'");
     expect(noIg.rows).toHaveLength(0);
-    const logos = await db.query("select 1 from public.cards where logo_url is not null");
-    expect(logos.rows).toHaveLength(0);
+    const noLogo = await db.query("select 1 from public.cards where logo_url is null");
+    expect(noLogo.rows.length).toBeGreaterThanOrEqual(2); // dental y estudio sin logo
+    const withLogo = await db.query("select cover_mode from public.cards where logo_url is not null order by slug");
+    expect(withLogo.rows).toHaveLength(4);
+    const gradient = await db.query("select 1 from public.cards where slug = 'salon-maria' and cover_mode = 'gradient' and cover_fade");
+    expect(gradient.rows).toHaveLength(1);
     const wa = await db.query("select 1 from public.card_actions a join public.cards c on c.id = a.card_id where c.slug = 'barberia-carlos' and a.type = 'whatsapp'");
     expect(wa.rows).toHaveLength(2);
   });

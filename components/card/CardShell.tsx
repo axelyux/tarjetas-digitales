@@ -23,6 +23,7 @@ export function CardShell({ data, embedded = false, children }: Props) {
     "--card-background": data.backgroundColor,
     "--card-text": data.textColor,
     "--card-accent": data.accentColor,
+    "--card-cover-2": data.coverColor2,
     "--card-on-primary": readableOn(data.primaryColor),
     "--card-on-accent": readableOn(data.accentColor),
     "--card-radius": RADIUS_VALUES[data.borderRadius],

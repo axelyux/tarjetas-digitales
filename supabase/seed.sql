@@ -77,3 +77,16 @@ select id, b.name, b.address, b.maps, b.phone, b.ord from public.cards,
           ('Sucursal Madero','Calle Madero 45','https://maps.google.com/?q=Madero+45','5577889911',1)) as b(name, address, maps, phone, ord)
 where slug = 'cafe-central'
   and not exists (select 1 from public.card_branches x where x.card_id = cards.id);
+
+-- 3) Imágenes y banners de las tarjetas demo (requiere la migración 0003). Los archivos viven en /public/demo.
+update public.cards set logo_url = '/demo/barberia-logo.svg', cover_image_url = '/demo/barberia-cover.svg',
+  cover_mode = 'image', cover_fade = true, layout_variant = 'hero'
+  where slug = 'barberia-carlos' and logo_url is null;
+update public.cards set logo_url = '/demo/salon-logo.svg', cover_image_url = '/demo/salon-cover.svg',
+  cover_mode = 'gradient', cover_color2 = '#f472b6', cover_fade = true, layout_variant = 'hero'
+  where slug = 'salon-maria' and logo_url is null;
+update public.cards set logo_url = '/demo/taller-logo.svg', logo_shape = 'rounded'
+  where slug = 'taller-juan' and logo_url is null;
+update public.cards set logo_url = '/demo/cafe-logo.svg', cover_image_url = '/demo/cafe-cover.svg',
+  cover_mode = 'image', cover_fade = false, layout_variant = 'hero'
+  where slug = 'cafe-central' and logo_url is null;

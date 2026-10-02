@@ -83,3 +83,13 @@ export function mapsHref(value: string): string | null {
   if (/^(javascript|data|vbscript|file):/i.test(v)) return null;
   return mapsLinkFromAddress(v);
 }
+
+/** Imágenes de demostración incluidas en la propia app (/demo/*.svg). */
+export function isOwnDemoAsset(value: string): boolean {
+  return /^\/demo\/[\w.-]+\.(svg|webp|png|jpg)$/.test(value);
+}
+
+/** URL de imagen segura: http(s) o un asset de demostración propio. */
+export function isImageUrl(value: string): boolean {
+  return isOwnDemoAsset(value) || isHttpUrl(value);
+}

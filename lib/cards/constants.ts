@@ -9,6 +9,7 @@ export const LOGO_SIZES = ["sm", "md", "lg"] as const;
 export const LOGO_SHAPES = ["circle", "rounded", "square"] as const;
 export const FONTS = ["inter", "poppins", "playfair", "space-grotesk", "dm-sans"] as const;
 export const BACKGROUND_MODES = ["color", "image"] as const;
+export const COVER_MODES = ["color", "gradient", "image"] as const;
 export const BUTTON_ICONS = [
   "link", "menu", "tag", "calendar", "shopping-bag", "star", "gift", "clock",
   "map-pin", "phone", "mail", "globe", "camera", "heart", "book-open", "truck", "file-text", "video",
@@ -25,6 +26,7 @@ export type LogoSize = (typeof LOGO_SIZES)[number];
 export type LogoShape = (typeof LOGO_SHAPES)[number];
 export type FontKey = (typeof FONTS)[number];
 export type BackgroundMode = (typeof BACKGROUND_MODES)[number];
+export type CoverMode = (typeof COVER_MODES)[number];
 export type ButtonIcon = (typeof BUTTON_ICONS)[number];
 
 export const TEMPLATE_LABELS: Record<Template, string> = {

@@ -9,7 +9,7 @@ import { FormProvider, useForm, useWatch, type FieldPath } from "react-hook-form
 import { toast } from "sonner";
 import { saveCard } from "@/lib/cards/actions";
 import {
-  ACTIONS_LAYOUTS, BORDER_RADII, BUTTON_STYLES, FONTS, FONT_LABELS, LAYOUT_LABELS, LAYOUT_VARIANTS, LOGO_SHAPES,
+  ACTIONS_LAYOUTS, BORDER_RADII, BUTTON_STYLES, COVER_MODES, FONTS, FONT_LABELS, LAYOUT_LABELS, LAYOUT_VARIANTS, LOGO_SHAPES,
   LOGO_SIZES, PAYMENT_LABELS, PAYMENT_STATUSES, PUBLICATION_HINTS, PUBLICATION_LABELS, PUBLICATION_STATUSES,
   SHADOW_STYLES, TEMPLATES, TEMPLATE_LABELS, type PublicationStatus,
 } from "@/lib/cards/constants";
@@ -50,6 +50,7 @@ const SHADOW_LABELS = { none: "Ninguna", soft: "Suave", strong: "Marcada" } as c
 const SIZE_LABELS = { sm: "Pequeño", md: "Medio", lg: "Grande" } as const;
 const SHAPE_LABELS = { circle: "Círculo", rounded: "Redondeado", square: "Cuadrado" } as const;
 const ACTIONS_LABELS = { stack: "Vertical", grid: "Cuadrícula" } as const;
+const COVER_LABELS = { color: "Color sólido", gradient: "Degradado", image: "Imagen" } as const;
 
 type Props = {
   initial: CardInput;
@@ -340,7 +341,24 @@ export function CardForm({ initial, mode, updatedAt, previewToken }: Props) {
               cardId={values.id} kind="logo" label="Logo" value={values.logoUrl} maxDimension={768}
               onChange={(u, ratio) => { set("logoUrl", u); set("logoRatio", ratio ?? 1); }}
             />
-            <ImageUploader cardId={values.id} kind="cover" label="Portada (estructura “Portada”)" value={values.coverImageUrl} onChange={(u) => set("coverImageUrl", u)} />
+            <div className="flex flex-col gap-3 rounded-lg border border-line p-3 sm:col-span-2">
+              <ChoiceRow label="Banner superior (estructura “Portada”)">
+                <Segmented name="Estilo del banner" value={values.coverMode} options={opts(COVER_MODES, COVER_LABELS)} onChange={(v) => set("coverMode", v)} />
+              </ChoiceRow>
+              {values.layoutVariant !== "hero" ? (
+                <p className="text-xs text-muted">El banner se muestra con la estructura de cabecera “Portada”. <button type="button" className="underline" onClick={() => set("layoutVariant", "hero")}>Activarla</button></p>
+              ) : null}
+              {values.coverMode === "gradient" ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <ColorField id="primaryColorCover" label="Color inicial (el principal)" value={values.primaryColor} onChange={(v) => set("primaryColor", v)} />
+                  <ColorField id="coverColor2" label="Color final" value={values.coverColor2} onChange={(v) => set("coverColor2", v)} />
+                </div>
+              ) : null}
+              {values.coverMode === "image" ? (
+                <ImageUploader cardId={values.id} kind="cover" label="Imagen del banner" value={values.coverImageUrl} onChange={(u) => set("coverImageUrl", u)} />
+              ) : null}
+              <Toggle id="coverFade" label="Difuminar el borde inferior" description="El banner se funde suavemente con el fondo de la tarjeta." checked={values.coverFade} onChange={(v) => set("coverFade", v)} />
+            </div>
             <ChoiceRow label="Tamaño del logo"><Segmented name="Tamaño del logo" value={values.logoSize} options={opts(LOGO_SIZES, SIZE_LABELS)} onChange={(v) => set("logoSize", v)} /></ChoiceRow>
             <ChoiceRow label="Forma del logo (logos cuadrados)"><Segmented name="Forma del logo" value={values.logoShape} options={opts(LOGO_SHAPES, SHAPE_LABELS)} onChange={(v) => set("logoShape", v)} /></ChoiceRow>
             <ChoiceRow label="Fondo de la página">

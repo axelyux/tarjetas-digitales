@@ -47,10 +47,25 @@ export function CardHeader({ data, nameClassName = "", categoryClassName = "", d
   if (variant === "hero") {
     return (
       <header className="flex flex-col items-center text-center">
-        <div className="relative h-40 w-full overflow-hidden" style={{ background: "var(--card-primary)" }}>
-          {data.coverImageUrl ? (
+        <div
+          className={`relative w-full overflow-hidden ${data.coverFade ? "h-48" : "h-40"}`}
+          style={{
+            background:
+              data.coverMode === "gradient"
+                ? "linear-gradient(135deg, var(--card-primary), var(--card-cover-2))"
+                : "var(--card-primary)",
+          }}
+        >
+          {data.coverMode === "image" && data.coverImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- imagen servida por el CDN de Supabase
             <img src={data.coverImageUrl} alt="" width={960} height={320} fetchPriority="high" decoding="async" className="h-full w-full object-cover" />
+          ) : null}
+          {data.coverFade ? (
+            <div
+              aria-hidden="true"
+              className="absolute inset-x-0 bottom-0 h-28"
+              style={{ background: "linear-gradient(to bottom, transparent, var(--card-background))" }}
+            />
           ) : null}
         </div>
         <div className="-mt-12 flex flex-col items-center gap-2 px-5">

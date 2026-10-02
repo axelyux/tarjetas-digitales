@@ -1,17 +1,17 @@
 import { resolveActionHref } from "./action-types";
 import {
-  ACTION_TYPES, ACTIONS_LAYOUTS, BACKGROUND_MODES, BORDER_RADII, BUTTON_ICONS, BUTTON_STYLES, CARD_STYLES,
+  ACTION_TYPES, ACTIONS_LAYOUTS, BACKGROUND_MODES, BORDER_RADII, BUTTON_ICONS, BUTTON_STYLES, CARD_STYLES, COVER_MODES,
   FONTS, LAYOUT_VARIANTS, LOGO_SHAPES, LOGO_SIZES, PAYMENT_STATUSES, PUBLICATION_STATUSES, SHADOW_STYLES, TEMPLATES,
 } from "./constants";
 import { sanitizeHours } from "./hours";
-import { isHttpUrl, normalizeWhatsapp } from "./links";
+import { isImageUrl, normalizeWhatsapp } from "./links";
 import type { CardInput } from "./schema";
 import type { AdminCard, AdminListItem, CardAction, CardBranch, DigitalCardData } from "./types";
 
 /** Columnas publicas: anon no puede leer is_paid, estados de pago, tokens ni campos legacy. */
 export const PUBLIC_COLUMNS = [
   "id", "slug", "business_name", "description", "category", "address", "schedule", "extra_info",
-  "logo_url", "cover_image_url", "logo_ratio", "hours",
+  "logo_url", "cover_image_url", "cover_mode", "cover_color2", "cover_fade", "logo_ratio", "hours",
   "primary_color", "secondary_color", "background_color", "text_color", "accent_color",
   "template", "layout_variant", "actions_layout", "border_radius", "button_style", "card_style",
   "shadow_style", "logo_size", "logo_shape", "font", "background_mode", "background_image_url",
@@ -43,7 +43,7 @@ const num = (v: unknown, fallback: number, min: number, max: number): number => 
 };
 const safeAsset = (v: unknown): string | undefined => {
   const s = str(v);
-  return s && isHttpUrl(s) ? s : undefined;
+  return s && isImageUrl(s) ? s : undefined;
 };
 
 /** Orden estable aunque sort_order este duplicado, nulo o corrupto. */
@@ -108,6 +108,9 @@ export function rowToCardData(row: CardRow): DigitalCardData {
     logoUrl: safeAsset(row.logo_url),
     logoRatio: num(row.logo_ratio, 1, 0.05, 19.9),
     coverImageUrl: safeAsset(row.cover_image_url),
+    coverMode: pick(COVER_MODES, row.cover_mode, "color"),
+    coverColor2: color(row.cover_color2, "#64748b"),
+    coverFade: bool(row.cover_fade, false),
     primaryColor: color(row.primary_color, "#1e293b"),
     secondaryColor: color(row.secondary_color, "#f1f5f9"),
     backgroundColor: color(row.background_color, "#ffffff"),
@@ -183,6 +186,9 @@ export function adminCardToInput(card: AdminCard): CardInput {
     logoUrl: card.logoUrl ?? "",
     logoRatio: card.logoRatio,
     coverImageUrl: card.coverImageUrl ?? "",
+    coverMode: card.coverMode,
+    coverColor2: card.coverColor2,
+    coverFade: card.coverFade,
     backgroundImageUrl: card.backgroundImageUrl ?? "",
     primaryColor: card.primaryColor,
     secondaryColor: card.secondaryColor,
@@ -229,6 +235,9 @@ export function inputToCardData(input: CardInput): DigitalCardData {
     logoUrl: safeAsset(input.logoUrl),
     logoRatio: input.logoRatio || 1,
     coverImageUrl: safeAsset(input.coverImageUrl),
+    coverMode: input.coverMode,
+    coverColor2: color(input.coverColor2, "#64748b"),
+    coverFade: input.coverFade,
     primaryColor: color(input.primaryColor, "#1e293b"),
     secondaryColor: color(input.secondaryColor, "#f1f5f9"),
     backgroundColor: color(input.backgroundColor, "#ffffff"),
@@ -278,6 +287,9 @@ export function inputToCardRow(input: CardInput) {
     logo_url: nullIfEmpty(input.logoUrl),
     logo_ratio: input.logoUrl ? input.logoRatio : 1,
     cover_image_url: nullIfEmpty(input.coverImageUrl),
+    cover_mode: input.coverMode,
+    cover_color2: input.coverColor2,
+    cover_fade: input.coverFade,
     background_image_url: nullIfEmpty(input.backgroundImageUrl),
     primary_color: input.primaryColor,
     secondary_color: input.secondaryColor,
