@@ -31,6 +31,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     alternates: { canonical: url },
+    // El ícono de la pestaña es el logo del negocio (si no tiene, se usa el ícono por defecto).
+    ...(card.logoUrl ? { icons: { icon: card.logoUrl, apple: card.logoUrl } } : {}),
     openGraph: { title, description, url, type: "website", locale: "es_MX", siteName: card.businessName, images: image ? [{ url: image }] : undefined },
     twitter: { card: image ? "summary_large_image" : "summary", title, description, images: image ? [image] : undefined },
   };
