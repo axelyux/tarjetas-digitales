@@ -61,7 +61,7 @@ export async function listActiveSlugs(): Promise<{ slug: string; updatedAt: stri
     const { data } = await createPublicClient()
       .from("cards")
       .select("slug,updated_at")
-      .order("created_at", { ascending: false })
+      .order("updated_at", { ascending: false }) // anon solo puede leer columnas públicas (no created_at)
       .limit(5000);
     return (data ?? []).map((r) => ({ slug: r.slug as string, updatedAt: r.updated_at as string }));
   } catch {

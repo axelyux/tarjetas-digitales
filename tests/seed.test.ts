@@ -80,6 +80,9 @@ describe("seed.sql", () => {
       const acts = await db.query(`select ${PUBLIC_ACTION_COLUMNS} from public.card_actions where card_id = $1`, [(card.rows[0] as unknown as { id: string }).id]);
       expect(acts.rows.length).toBeGreaterThan(3);
       await db.query(`select ${PUBLIC_BRANCH_COLUMNS} from public.card_branches`);
+      // consulta del sitemap
+      const sm = await db.query("select slug,updated_at from public.cards order by updated_at desc limit 5000");
+      expect(sm.rows.length).toBe(4);
       const status = await db.query("select public.resolve_card_slug('dental-sonrisa') r");
       expect((status.rows[0] as { r: string }).r).toBe("unavailable");
       // anon NO puede filtrar por columnas privadas
